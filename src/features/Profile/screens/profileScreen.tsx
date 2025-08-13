@@ -20,7 +20,7 @@ import {useToast} from 'react-native-toast-notifications';
 import {ErrorModal} from '../../../core/components/errorModal';
 import {FontFamily} from '../../../themes/fonts';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
-import { scaleFont } from '../../../utils/helper';
+import {scaleFont} from '../../../utils/helper';
 
 export const ProfileScreen = () => {
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
@@ -34,29 +34,26 @@ export const ProfileScreen = () => {
     newPassword: '',
     newPasswordAgain: '',
   });
-const [showError,setShowError]=useState(false)
+  const [showError, setShowError] = useState(false);
 
-useEffect(()=>{
-  dispatch(resetPasswordStatus())
-  dispatch(resetError());
-},[])
+  useEffect(() => {
+    dispatch(resetPasswordStatus());
+    dispatch(resetError());
+  }, []);
   useEffect(() => {
     if (status == 'success') {
       toast.show('Password reset successfully', {
         style: styles.toast,
         textStyle: {
           fontFamily: FontFamily.regular,
-          fontSize:scaleFont(18),
+          fontSize: scaleFont(18),
           color: colors.white,
         },
       });
-      dispatch(resetPasswordStatus())
-     
+      dispatch(resetPasswordStatus());
     } else if (error) {
       toast.show(error);
       dispatch(resetError());
-
-     
     }
   }, [status, error]);
   const handleChange = (key, value) => {
@@ -68,8 +65,6 @@ useEffect(()=>{
       !form.newPassword ||
       form.newPassword !== form.newPasswordAgain
     ) {
-      //   alert('Check password fields');
-     
       return;
     }
     dispatch(
@@ -94,7 +89,6 @@ useEffect(()=>{
           form={form}
           onChange={handleChange}
           onSubmit={handleResetPassword}
-          
         />
       </View>
     </SafeAreaView>
@@ -109,6 +103,6 @@ const styles = StyleSheet.create({
   toast: {
     bottom: 50,
     fontFamily: FontFamily.regular,
-    fontSize:scaleFont(22),
+    fontSize: scaleFont(22),
   },
 });
