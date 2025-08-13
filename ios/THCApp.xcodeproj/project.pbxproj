@@ -11,6 +11,20 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		FBD84A3CD24A4113BF8CEB35 /* duepuntozero_black.otf in Resources */ = {isa = PBXBuildFile; fileRef = 492D4D92FECE4133A210FBC4 /* duepuntozero_black.otf */; };
+		670E2E5A1E74429C875A6ED9 /* duepuntozero_bold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 7E0F57E53F444124A02B44CA /* duepuntozero_bold.otf */; };
+		5F10ECB0849D45E89C73EDC4 /* duepuntozero_extrabold.otf in Resources */ = {isa = PBXBuildFile; fileRef = CAD9FEC1D00741A98DFC107F /* duepuntozero_extrabold.otf */; };
+		01F806618351436EB6939093 /* duepuntozero_extralight.otf in Resources */ = {isa = PBXBuildFile; fileRef = 7446F3804AC04830BA026448 /* duepuntozero_extralight.otf */; };
+		DA32958866054601A5AEE274 /* duepuntozero_regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = EBA4302454AB4564AF50F3C1 /* duepuntozero_regular.otf */; };
+		B9F7EFAAFC6D4F4C915874E0 /* Cocogoose-Compressed-Light-Trial.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F5BB1110E8AF4FB18C9C747A /* Cocogoose-Compressed-Light-Trial.ttf */; };
+		9065A31A31524AE89E7AB201 /* calibri-bold-italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D5F4073D7F314EDEBA90DF35 /* calibri-bold-italic.ttf */; };
+		DF0283879F404C13AE5B581A /* calibri-bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F0276E2FCEA74AC39749A533 /* calibri-bold.ttf */; };
+		9405823DE903456C96459324 /* calibri-italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A2165E00FB6D45E4B4E3EC1E /* calibri-italic.ttf */; };
+		4DA19F3E17EE44238F4F053F /* calibri-regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9A4A676E06DB4F7F898B3EE0 /* calibri-regular.ttf */; };
+		16066D4FF5A446AA83929855 /* calibril.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0658CB63A63C470CA9297F90 /* calibril.ttf */; };
+		1EB0FA0D5A804F4FA48563A0 /* duepuntozero_black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 736E1D7F15DA4374BC20F79B /* duepuntozero_black.ttf */; };
+		4CC555D5F4B24601A9B9531D /* duepuntozero_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7342A21E70554006B30F598C /* duepuntozero_bold.ttf */; };
+		B3E65D67C4544D608B5024AB /* duepuntozero_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C3594EECE85D493888C21064 /* duepuntozero_regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,6 +49,20 @@
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = THCApp/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = THCApp/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		492D4D92FECE4133A210FBC4 /* duepuntozero_black.otf */ = {isa = PBXFileReference; name = "duepuntozero_black.otf"; path = "../src/assets/fonts/duepuntozero_black.otf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		7E0F57E53F444124A02B44CA /* duepuntozero_bold.otf */ = {isa = PBXFileReference; name = "duepuntozero_bold.otf"; path = "../src/assets/fonts/duepuntozero_bold.otf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		CAD9FEC1D00741A98DFC107F /* duepuntozero_extrabold.otf */ = {isa = PBXFileReference; name = "duepuntozero_extrabold.otf"; path = "../src/assets/fonts/duepuntozero_extrabold.otf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		7446F3804AC04830BA026448 /* duepuntozero_extralight.otf */ = {isa = PBXFileReference; name = "duepuntozero_extralight.otf"; path = "../src/assets/fonts/duepuntozero_extralight.otf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		EBA4302454AB4564AF50F3C1 /* duepuntozero_regular.otf */ = {isa = PBXFileReference; name = "duepuntozero_regular.otf"; path = "../src/assets/fonts/duepuntozero_regular.otf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		F5BB1110E8AF4FB18C9C747A /* Cocogoose-Compressed-Light-Trial.ttf */ = {isa = PBXFileReference; name = "Cocogoose-Compressed-Light-Trial.ttf"; path = "../src/assets/fonts/Cocogoose-Compressed-Light-Trial.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		D5F4073D7F314EDEBA90DF35 /* calibri-bold-italic.ttf */ = {isa = PBXFileReference; name = "calibri-bold-italic.ttf"; path = "../src/assets/fonts/calibri-bold-italic.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		F0276E2FCEA74AC39749A533 /* calibri-bold.ttf */ = {isa = PBXFileReference; name = "calibri-bold.ttf"; path = "../src/assets/fonts/calibri-bold.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		A2165E00FB6D45E4B4E3EC1E /* calibri-italic.ttf */ = {isa = PBXFileReference; name = "calibri-italic.ttf"; path = "../src/assets/fonts/calibri-italic.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		9A4A676E06DB4F7F898B3EE0 /* calibri-regular.ttf */ = {isa = PBXFileReference; name = "calibri-regular.ttf"; path = "../src/assets/fonts/calibri-regular.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		0658CB63A63C470CA9297F90 /* calibril.ttf */ = {isa = PBXFileReference; name = "calibril.ttf"; path = "../src/assets/fonts/calibril.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		736E1D7F15DA4374BC20F79B /* duepuntozero_black.ttf */ = {isa = PBXFileReference; name = "duepuntozero_black.ttf"; path = "../src/assets/fonts/duepuntozero_black.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		7342A21E70554006B30F598C /* duepuntozero_bold.ttf */ = {isa = PBXFileReference; name = "duepuntozero_bold.ttf"; path = "../src/assets/fonts/duepuntozero_bold.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
+		C3594EECE85D493888C21064 /* duepuntozero_regular.ttf */ = {isa = PBXFileReference; name = "duepuntozero_regular.ttf"; path = "../src/assets/fonts/duepuntozero_regular.ttf"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +121,7 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
+				71AD5D9F390A4A61B47C197E /* Resources */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -115,6 +144,28 @@
 			);
 			path = Pods;
 			sourceTree = "<group>";
+		};
+		71AD5D9F390A4A61B47C197E /* Resources */ = {
+			isa = "PBXGroup";
+			children = (
+				492D4D92FECE4133A210FBC4 /* duepuntozero_black.otf */,
+				7E0F57E53F444124A02B44CA /* duepuntozero_bold.otf */,
+				CAD9FEC1D00741A98DFC107F /* duepuntozero_extrabold.otf */,
+				7446F3804AC04830BA026448 /* duepuntozero_extralight.otf */,
+				EBA4302454AB4564AF50F3C1 /* duepuntozero_regular.otf */,
+				F5BB1110E8AF4FB18C9C747A /* Cocogoose-Compressed-Light-Trial.ttf */,
+				D5F4073D7F314EDEBA90DF35 /* calibri-bold-italic.ttf */,
+				F0276E2FCEA74AC39749A533 /* calibri-bold.ttf */,
+				A2165E00FB6D45E4B4E3EC1E /* calibri-italic.ttf */,
+				9A4A676E06DB4F7F898B3EE0 /* calibri-regular.ttf */,
+				0658CB63A63C470CA9297F90 /* calibril.ttf */,
+				736E1D7F15DA4374BC20F79B /* duepuntozero_black.ttf */,
+				7342A21E70554006B30F598C /* duepuntozero_bold.ttf */,
+				C3594EECE85D493888C21064 /* duepuntozero_regular.ttf */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+			path = "";
 		};
 /* End PBXGroup section */
 
@@ -185,6 +236,20 @@
 			files = (
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
+				FBD84A3CD24A4113BF8CEB35 /* duepuntozero_black.otf in Resources */,
+				670E2E5A1E74429C875A6ED9 /* duepuntozero_bold.otf in Resources */,
+				5F10ECB0849D45E89C73EDC4 /* duepuntozero_extrabold.otf in Resources */,
+				01F806618351436EB6939093 /* duepuntozero_extralight.otf in Resources */,
+				DA32958866054601A5AEE274 /* duepuntozero_regular.otf in Resources */,
+				B9F7EFAAFC6D4F4C915874E0 /* Cocogoose-Compressed-Light-Trial.ttf in Resources */,
+				9065A31A31524AE89E7AB201 /* calibri-bold-italic.ttf in Resources */,
+				DF0283879F404C13AE5B581A /* calibri-bold.ttf in Resources */,
+				9405823DE903456C96459324 /* calibri-italic.ttf in Resources */,
+				4DA19F3E17EE44238F4F053F /* calibri-regular.ttf in Resources */,
+				16066D4FF5A446AA83929855 /* calibril.ttf in Resources */,
+				1EB0FA0D5A804F4FA48563A0 /* duepuntozero_black.ttf in Resources */,
+				4CC555D5F4B24601A9B9531D /* duepuntozero_bold.ttf in Resources */,
+				B3E65D67C4544D608B5024AB /* duepuntozero_regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,0 +1,61 @@
+{
+  "migIndex": 1,
+  "data": [
+    {
+      "path": "src/assets/fonts/Cocogoose-Compressed-Light-Trial.ttf",
+      "sha1": "9209340d7a6993886d95c959d104867e4c7ed64c"
+    },
+    {
+      "path": "src/assets/fonts/calibri-bold-italic.ttf",
+      "sha1": "19007d5081eda7a9dd06dbdac7f4f5f9e8fd4e6a"
+    },
+    {
+      "path": "src/assets/fonts/calibri-bold.ttf",
+      "sha1": "e400e1f7ee99f95cfda7a826329719192dff59c8"
+    },
+    {
+      "path": "src/assets/fonts/calibri-italic.ttf",
+      "sha1": "323ca3d1ed972435de5e3fbabdc4e474df66775d"
+    },
+    {
+      "path": "src/assets/fonts/calibri-regular.ttf",
+      "sha1": "f02f8c93b08db636466b9a375f8ec0cd4f2bb9dd"
+    },
+    {
+      "path": "src/assets/fonts/calibril.ttf",
+      "sha1": "5ca2339e93d4527eebf01ae70204b4123ee267d3"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_black.otf",
+      "sha1": "b608781493fc1bad16d08e3b795b3d3276a21465"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_black.ttf",
+      "sha1": "2f72db9cb59c38b0b33958edb5a20e9b5a2d5ea5"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_bold.otf",
+      "sha1": "311da097fe75f21f9a2b3f48ae13b0e8c9536ced"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_bold.ttf",
+      "sha1": "eb0b2ccede8aedc3d2f8132e6337f5d083950c74"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_extrabold.otf",
+      "sha1": "a2519b1ca9186ab1249997e49d895f5caa4912f1"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_extralight.otf",
+      "sha1": "325d98922016e62de8a265a134e69a7d46f95205"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_regular.otf",
+      "sha1": "0ef67ef3b71e4e158c054f8cccea93709b4fff49"
+    },
+    {
+      "path": "src/assets/fonts/duepuntozero_regular.ttf",
+      "sha1": "a205eea39f838fc205b4377578aac334d705d123"
+    }
+  ]
+}
