@@ -28,6 +28,15 @@ const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedPath, setRecordedPath] = useState('');
+  const [hasMicPermission, setHasMicPermission] = useState(false);
+
+  useEffect(() => {
+    // Clear any old recording when a new track is loaded from parent
+    setRecordedPath('');
+    setIsPlaying(false);
+    setPosition(0);
+    setDuration(0);
+  }, [track]);
 
   const requestPermission = async () => {
     if (Platform.OS === 'android') {
@@ -39,14 +48,21 @@ const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
           buttonPositive: 'OK',
         },
       );
-      return result === PermissionsAndroid.RESULTS.GRANTED;
+      if (result === PermissionsAndroid.RESULTS.GRANTED) {
+        setHasMicPermission(true);
+        return true;
+      }
+      return false;
     }
+    setHasMicPermission(true);
     return true;
   };
 
   const onStartRecord = async () => {
-    const granted = await requestPermission();
-    if (!granted) return;
+    if (!hasMicPermission) {
+      await requestPermission();
+      return; // ✅ stop here, user will press again to start
+    }
 
     try {
       const path = Platform.select({
@@ -161,7 +177,7 @@ const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
 
   return (
     <>
-      {(recordedPath || (!isLocal && track)) && (
+      {(recordedPath ||(!isLocal && track)) && !isRecording &&(
         <View style={styles.container}>
           <TouchableOpacity
             onPress={isPlaying ? pause : play}

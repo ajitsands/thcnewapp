@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
 import colors from '../../../themes/colors';
 import {Header} from '../../../core/components/header';
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
   },
   historyList: {
     marginHorizontal: 10,
-    //  flex: 1,
+      flex: 1,
     backgroundColor: colors.primary,
     borderBottomRightRadius: 10,
     borderTopLeftRadius: 10,
@@ -289,18 +290,17 @@ const styles = StyleSheet.create({
     color: colors.white,
     // marginBottom:5,
     fontFamily: FontFamily.variation,
-    fontSize: scaleFont(14),
+    fontSize: scaleFont(12),
     width: '100%',
   },
   assetValue: {
     color: colors.white,
     fontFamily: FontFamily.medium,
-    fontSize: scaleFont(16),
+    fontSize: scaleFont(14),
     marginLeft: 5,
   },
   textBox: {
-    height: 40,
-    // flex:1,
+    padding:5,
     width: '100%',
     borderWidth: 1,
     borderColor: colors.white,

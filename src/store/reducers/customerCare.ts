@@ -21,7 +21,6 @@ export const getCustomerCareContact = createAsyncThunk(
     try {
       console.log(params);
       const response = await getRequest(ApiUrl.getScheduleURL,params);
-       console.log("ppppppp",response);
       if(response.data.status=='Failed'){
         console.log(response?.data?.api_message)
         throw new Error(response?.data?.api_message)

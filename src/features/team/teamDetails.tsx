@@ -258,16 +258,17 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: scaleFont(24),
     fontFamily: FontFamily.bold,
-    top: 3,
-    left: 9,
+    top: 6,
+    left: 12,
   },
   flag: {
-    height: 50,
+    height: 60,
     width: 35,
     alignSelf: 'flex-end',
     marginTop: -40,
     marginRight: 10,
     zIndex: 10,
+
   },
   goButton: {
     // backgroundColor: colors.red,

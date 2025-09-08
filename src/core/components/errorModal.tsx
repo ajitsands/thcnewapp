@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.white,
-    height: screenHeight * 0.15,
+    height: screenHeight * 0.2,
     borderRadius: Platform.OS == 'ios' ? 30 : 0,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
@@ -119,7 +119,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.primary,
     height: 45,
-    borderRadius: 10,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
     justifyContent: 'center',
   },
   headingContainer: {
@@ -138,12 +139,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   error: {
     fontFamily: FontFamily.bold,
     fontSize: scaleFont(16),
-    color: colors.black,
+    color: colors.primary,
   },
 });

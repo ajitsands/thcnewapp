@@ -53,6 +53,11 @@ export const ProfileScreen = () => {
       dispatch(resetPasswordStatus());
     } else if (error) {
       toast.show(error);
+      setForm({
+        oldPassword: '',
+        newPassword: '',
+        newPasswordAgain: '',
+      });
       dispatch(resetError());
     }
   }, [status, error]);

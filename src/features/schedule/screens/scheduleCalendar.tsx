@@ -103,7 +103,7 @@ const MonthView = ({month, markedDates}) => {
                       ? colors.blue
                       : colors.red,
                   borderWidth:
-                    selectedDay.isSame(date, 'day') && !loading ? 3 : 0.5,
+                    selectedDay.isSame(date, 'day') && !loading ? 3 : 0.7,
                 },
               ]}
               onPress={() => {
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 45,
     backgroundColor: colors.white,
-    marginRight: 24,
+    marginRight: 26,
     marginTop: 10,
   },
   dayName: {

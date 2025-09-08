@@ -783,8 +783,8 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: scaleFont(24),
     fontFamily: FontFamily.bold,
-    top: 3,
-    left: 9,
+    top: 6,
+    left: 12,
   },
   flag: {
     height: 60,

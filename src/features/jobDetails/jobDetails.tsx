@@ -12,7 +12,7 @@ import {FontFamily} from '../../themes/fonts';
 import {navigate} from '../../navigators';
 import {useAppDispatch, useAppSelector} from '../../store';
 import LoadingOverlay from '../../core/components/loadingOverlay';
-import {Loader} from '../../core/components/loader';
+
 
 import {getTeamDetails} from '../../store/reducers/getTeam';
 import {useEffect, useState} from 'react';
@@ -82,9 +82,9 @@ export const WorkDetails = (props: WorkDetailProps) => {
             Work Order No:{ticketDetails?.ticket_ref_code}
           </Text>
         </View>
-        <View style={{backgroundColor: colors.primary}}>
+        <View style={{backgroundColor: colors.primary,position: 'relative' }}>
           <ImageBackground
-            style={styles.flag}
+            style={[styles.flag,{ position: 'absolute', top: -20,  }]}
             source={require('../../assets/images/3.0x/thoranam.png')}
             tintColor={
               ticketDetails?.ticket_priority == 'Emergency'
@@ -193,16 +193,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   details: {
-    paddingTop: 0,
+    paddingTop: 20,
     padding: 15,
     backgroundColor: colors.primary,
     borderBottomRightRadius: 10,
+  
   },
   detailText: {
     fontFamily: FontFamily.deupRegular,
     color: colors.white,
     fontSize: scaleFont(18),
-    width: '30%',
+    width: '35%',
   },
   headerText: {
     color: colors.white,
@@ -214,14 +215,14 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: scaleFont(24),
     fontFamily: FontFamily.bold,
-    top: 3,
-    left: 9,
+    top: 8,
+    left: 12,
   },
   flag: {
     height: 60,
     width: 35,
     alignSelf: 'flex-end',
-    marginTop: -40, // Pushes it upward to "flow down" over the header
+    marginTop: -20, // Pushes it upward to "flow down" over the header
     marginRight: 10,
     zIndex: 10,
   },
@@ -255,7 +256,8 @@ const styles = StyleSheet.create({
   imageContainer: {
     alignSelf: 'flex-end',
     position: 'absolute',
-    right: 15,
+    right:10,
+    paddingTop:20
   },
   sliceContainer: {
     width: 60, // Diameter of the circle
@@ -264,11 +266,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 15,
+   
   },
   fullCircle: {
     width: 60,
     height: 60,
     borderRadius: 30,
+ 
   },
   errorCircle: {
     height: 60,

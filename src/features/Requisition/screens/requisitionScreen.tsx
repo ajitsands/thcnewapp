@@ -170,7 +170,7 @@ export const RequisitionView = () => {
       <Header />
       <View style={styles.historyList}>
         <View style={styles.header}>
-          <MaterialIcons name="menu-open" color={colors.primary} size={25} />
+          <MaterialIcons name="menu-open" color={colors.white} size={25} />
           <Text style={styles.headerText}>MATERIAL REQUISITION</Text>
         </View>
         <View
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     marginBottom: 50,
   },
   header: {
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.red,
     height: 50,
     flexDirection: 'row',
     padding: 10,
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerText: {
-    color: colors.primary,
+    color: colors.white,
     fontFamily: FontFamily.duepBold,
     fontSize: scaleFont(18),
     marginLeft: 10,

@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   itemContainer: {
     backgroundColor: colors.primary,
     borderRadius: 20,
-    height: 160,
+    height: 180,
     width: screenWidth / 2 - 25,
     padding: 20,
     margin: 10,

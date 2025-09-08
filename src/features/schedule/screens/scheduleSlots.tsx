@@ -32,7 +32,7 @@ export const ScheduleSlots = ({route}: any) => {
   const gridHeight = screenHeight * 0.7; // container height
   const gridWidth = screenWidth - 50; // subtract padding/margin if needed
   const headerHeight = 50; // adjust if needed
-  const weekDaysHeight = 40; // adjust if needed
+  const weekDaysHeight = 50; // adjust if needed
 
   const availableGridHeight = gridHeight - headerHeight - weekDaysHeight;
   const cellWidth = gridWidth / NUM_COLUMNS;
@@ -120,10 +120,10 @@ export const ScheduleSlots = ({route}: any) => {
                   }}
                   style={[styles.cell, {width: cellWidth, height: cellHeight}]}
                   activeOpacity={1}>
-                  <Text style={styles.dayText}>{i + 1}</Text>
+                  <Text style={[styles.dayText,{fontSize:scaleFont(16)}]}>{i + 1}</Text>
                   {isActive && !error && !loading && (
                     <View style={styles.rectangle}>
-                      <Text style={styles.dayText}>{slots[0]?.[slotKey]}</Text>
+                      <Text style={[styles.dayText,{bottom:1 }]}>{slots[0]?.[slotKey]}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -171,6 +171,7 @@ const styles = StyleSheet.create({
     height: 30,
     backgroundColor: colors.white,
     marginHorizontal: 10,
+    marginBottom:10
   },
   dayName: {
     flex: 1,
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     borderColor: colors.red,
     borderWidth: 0.5,
   },
-  dayText: {color: colors.white},
+  dayText: {color: colors.white,fontSize:scaleFont(10)},
   calendarContainer: {
     marginHorizontal: 15,
     borderRadius: 10,
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
     // width: cellSize,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
+    borderWidth: .6,
     borderColor: colors.red,
   },
   slotContainer: {
@@ -216,14 +217,16 @@ const styles = StyleSheet.create({
   rectangle: {
     width: '100%',
     height: 15,
-    backgroundColor: 'red',
+    backgroundColor: colors.red,
     borderStyle: 'solid',
     borderLeftWidth: 0,
     borderRightColor: 'transparent',
     borderBottomColor: colors.red,
     position: 'absolute',
     bottom: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
+   
+   
   },
 });
