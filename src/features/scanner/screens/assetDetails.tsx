@@ -45,6 +45,7 @@ export const AssetDetails = (props: AssetProps) => {
   } = useAppSelector(state => state.assetDetails);
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
   const assetDetails = assets?.data[0];
+  console.log("PPPP",assetDetails)
   const [showImageModal, setShowImageModal] = useState(false);
   const dispatch = useAppDispatch();
   const toast = useToast();
@@ -92,7 +93,7 @@ export const AssetDetails = (props: AssetProps) => {
       <Header isHome={false} />
       <View style={{marginVertical: 20, flex: 1}}>
         <HeaderBar title="ASSET DETAILS" isAssetDetails={true} />
-        <View style={[styles.historyList, {flex: pageNumber == 0 ? 1 : 0}]}>
+        <ScrollView style={[styles.historyList, {flex: pageNumber == 0 ? 1 : 0}]}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => handleSlide(pageNumber - 1)}>
               <Image
@@ -205,7 +206,7 @@ export const AssetDetails = (props: AssetProps) => {
               {pageNumber == 1 && <AssetServices code={assetCode} />}
             </View>
           </Animated.View>
-        </View>
+        </ScrollView>
         {pageNumber == 1 && assetServiceImagesStatus == 'success' && (
           <View style={{flexDirection: 'row', justifyContent: 'center'}}>
             {assetServicesImages?.data?.map((item, index) => (
@@ -314,7 +315,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.white,
     justifyContent: 'center',
-    alignItems: 'center',
+     alignItems: 'center',
+    marginTop:15
   },
   slicedImage: {
     width: 70, // Diameter of the circle

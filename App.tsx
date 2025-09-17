@@ -29,7 +29,7 @@ function App(): React.JSX.Element {
       />
       <StatusBar
         translucent
-        backgroundColor={colors.primary}
+        backgroundColor={colors.transparent}
         barStyle="light-content"
       />
       <ToastProvider

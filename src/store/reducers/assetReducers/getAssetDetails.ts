@@ -29,7 +29,7 @@ export const getAssetDetails = createAsyncThunk(
     try {
       console.log(params);
       const response = await getRequest(ApiUrl.getScheduleURL, params);
-      console.log(response);
+      console.log("response",response);
       if (response.data.status == 'Failed') {
         throw new Error(response?.data?.api_message);
       }

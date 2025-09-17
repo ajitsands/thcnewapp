@@ -14,14 +14,15 @@ import colors from '../../../themes/colors';
 import {scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
 import AssetModal from '../components/assetModal';
 import {navigate} from '../../../navigators';
+import {useIsFocused} from '@react-navigation/native';
 const frameSize = 250;
 export const QRScannerScreen = () => {
-  const navigation = useNavigation();
   const [qrValue, setQrValue] = useState('');
   const [flashOn, setFlashOn] = useState(false);
   const [visible, setVisible] = useState(false);
   const lastTap = useRef(0);
-  const onReadCode = event => {
+  const isFocused=useIsFocused()
+  const onReadCode = (event:any) => {
     if (qrValue !== event.nativeEvent.codeStringValue) {
       Vibration.vibrate();
       setQrValue(event.nativeEvent.codeStringValue);
@@ -36,10 +37,11 @@ export const QRScannerScreen = () => {
     lastTap.current = now;
   };
   const goToAssetDetails = () => {
-    console.log('bbb');
+    console.log('bbb',qrValue);
     if (qrValue) {
       navigate('AssetDetails', {assetCode: qrValue});
-    } else {
+    }
+     else {
       navigate('AssetDetails', {assetCode: 'THC-C0001-CY-1001-0YW'});
     }
   };
@@ -48,6 +50,7 @@ export const QRScannerScreen = () => {
     <View style={styles.container}>
       <Header isHome={false} />
       <View style={styles.scannerWrapper}>
+        {isFocused&&
         <Camera
           style={StyleSheet.absoluteFill}
           // showFrame={true}
@@ -57,7 +60,7 @@ export const QRScannerScreen = () => {
           onReadCode={onReadCode}
           torchMode={flashOn ? 'on' : 'off'}
         />
-
+        }
         <View style={[styles.mask, {height: (screenHeight - frameSize) / 2}]} />
 
         {/* Middle Section with Cutout */}
