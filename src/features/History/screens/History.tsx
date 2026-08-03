@@ -17,9 +17,12 @@ import {scaleFont} from '../../../utils/helper';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {getTicketDetails} from '../../../store/reducers/getTicketDetails';
+import {useToast} from 'react-native-toast-notifications';
+import moment from 'moment';
 
 export const HistoryScreen = () => {
   const dispatch = useAppDispatch();
+  const toast = useToast();
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('ALL');
@@ -65,15 +68,31 @@ export const HistoryScreen = () => {
   };
 
   const handleTicketPress = (item: any) => {
+    const formattedDate = item.visit_date
+      ? moment(item.visit_date, ['YYYY-MM-DD', 'DD-MM-YYYY', 'YYYY/MM/DD']).format('YYYY-MM-DD')
+      : moment().format('YYYY-MM-DD');
+
+    const ticketRef = item.ticket_ref_no || item.amc_ticket_ref_no || item.ticket_id;
+
     dispatch(
       getTicketDetails({
         action: 'get_amc_ticket_details',
         emp_code: employeeCode,
         APIKEY: apiKey,
-        visit_date: item.visit_date,
-        amc_ticket_ref_no: item.ticket_ref_no,
+        visit_date: formattedDate,
+        amc_ticket_ref_no: ticketRef,
       }),
-    );
+    )
+      .unwrap()
+      .then((res: any) => {
+        console.log('Successfully fetched ticket details:', res);
+      })
+      .catch((err: any) => {
+        console.log('Failed fetching ticket details:', err);
+        toast.show(typeof err === 'string' ? err : 'Unable to load ticket details', {
+          style: styles.toast,
+        });
+      });
   };
 
   const filterOptions = ['ALL', 'COMPLETED', 'PENDING', 'IN PROGRESS'];
@@ -346,5 +365,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     color: colors.grey,
     marginTop: 4,
+  },
+  toast: {
+    bottom: 50,
   },
 });
