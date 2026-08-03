@@ -12,7 +12,6 @@ import colors from '../../themes/colors';
 import {Header} from '../../core/components/header';
 import {FontFamily} from '../../themes/fonts';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import {homeData} from './data';
 import {navigate} from '../../navigators';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {getScheduleDates} from '../../store/reducers/getSchedules';
@@ -29,6 +28,39 @@ import LoadingOverlay from '../../core/components/loadingOverlay';
 import {scaleFont} from '../../utils/helper';
 
 const HomeScreen = () => {
+  const items = [
+    {
+      icon: require('../../assets/images/bar_code.png'),
+      title: 'SCAN',
+      route: 'Scanner',
+    },
+    {
+      icon: require('../../assets/images/schedule.png'),
+      title: 'SCHEDULE',
+      route: 'ScheduleCalendar',
+    },
+    {
+      icon: require('../../assets/images/history.png'),
+      title: 'HISTORY',
+      route: 'History',
+    },
+    {
+      icon: require('../../assets/images/requisition.png'),
+      title: 'REQUISITION',
+      route: 'RequisitionHistory',
+    },
+    {
+      icon: require('../../assets/images/profile.png'),
+      title: 'PROFILE',
+      route: 'ProfileScreen',
+    },
+    {
+      icon: require('../../assets/images/customer_care.png'),
+      title: 'CUSTOMER CARE',
+      route: '',
+    },
+  ];
+
   const dispatch = useAppDispatch();
   const toast = useToast();
   const {data, loading, status, error} = useAppSelector(
@@ -177,7 +209,7 @@ const HomeScreen = () => {
 
         {/* Dashboard Services Grid */}
         <View style={styles.gridContainer}>
-          {homeData.map((item, index) => {
+          {items.map((item, index) => {
             const isCustomerCare = item.route === '';
             return (
               <TouchableOpacity
