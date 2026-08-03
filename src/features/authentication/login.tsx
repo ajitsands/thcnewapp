@@ -187,16 +187,17 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 24,
     justifyContent: 'center',
   },
   logoContainer: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginTop: 10,
+    marginBottom: 4,
   },
   logo: {
-    height: 140,
-    width: 140,
+    height: 200,
+    width: 200,
     resizeMode: 'contain',
   },
   formCard: {
