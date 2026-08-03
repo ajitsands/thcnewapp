@@ -19,6 +19,7 @@ import {
 import {useToast} from 'react-native-toast-notifications';
 import {scaleFont} from '../../../utils/helper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
+import moment from 'moment';
 
 interface serviceProps {
   code: string;
@@ -75,6 +76,12 @@ export const AssetServices = (props: serviceProps) => {
     }
   }, [serviceDetails]);
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A';
+    const parsed = moment(dateStr);
+    return parsed.isValid() ? parsed.format('DD MMM YYYY') : dateStr;
+  };
+
   return (
     <View style={styles.container}>
       {assetServiceLoading ? (
@@ -101,6 +108,18 @@ export const AssetServices = (props: serviceProps) => {
           <View style={styles.servicesList}>
             {serviceDetails.map((service: any, index: number) => {
               const isSelected = selectedServiceIndex === index;
+              const serviceDate =
+                service.visit_date ||
+                service.service_date ||
+                service.date ||
+                service.created_at;
+              const technicianName =
+                service.emp_name ||
+                service.employee_name ||
+                service.tech_name ||
+                service.user_name ||
+                service.created_by;
+
               return (
                 <TouchableOpacity
                   key={index}
@@ -128,13 +147,52 @@ export const AssetServices = (props: serviceProps) => {
                       </Text>
                     </View>
 
-                    <Text
-                      style={[
-                        styles.serviceTitleText,
-                        isSelected && styles.selectedServiceTitleText,
-                      ]}>
-                      {service.service_description}
-                    </Text>
+                    <View style={styles.serviceInfoCol}>
+                      <Text
+                        style={[
+                          styles.serviceTitleText,
+                          isSelected && styles.selectedServiceTitleText,
+                        ]}>
+                        {service.service_description}
+                      </Text>
+
+                      {/* Meta Tags: Date & Performed By */}
+                      <View style={styles.metaRow}>
+                        {serviceDate ? (
+                          <View style={styles.metaBadge}>
+                            <MaterialIcons
+                              name="event"
+                              size={13}
+                              color={isSelected ? colors.white : colors.primary}
+                            />
+                            <Text
+                              style={[
+                                styles.metaText,
+                                isSelected && styles.selectedMetaText,
+                              ]}>
+                              {formatDate(serviceDate)}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {technicianName ? (
+                          <View style={styles.metaBadge}>
+                            <MaterialIcons
+                              name="person"
+                              size={13}
+                              color={isSelected ? colors.white : colors.primary}
+                            />
+                            <Text
+                              style={[
+                                styles.metaText,
+                                isSelected && styles.selectedMetaText,
+                              ]}>
+                              {technicianName}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
 
                     <MaterialIcons
                       name={isSelected ? 'check-circle' : 'chevron-right'}
@@ -153,6 +211,32 @@ export const AssetServices = (props: serviceProps) => {
               <View style={styles.remarksHeaderRow}>
                 <MaterialIcons name="edit-note" size={20} color={colors.primary} />
                 <Text style={styles.remarksTitle}>Technician Remarks & Voice Note</Text>
+              </View>
+
+              {/* Technician & Date Header in Remarks Card */}
+              <View style={styles.detailMetaGrid}>
+                <View style={styles.detailMetaItem}>
+                  <Text style={styles.detailMetaLabel}>PERFORMED BY</Text>
+                  <Text style={styles.detailMetaValue}>
+                    {selectedService?.emp_name ||
+                      selectedService?.employee_name ||
+                      selectedService?.tech_name ||
+                      selectedService?.user_name ||
+                      selectedService?.created_by ||
+                      'Technician'}
+                  </Text>
+                </View>
+                <View style={styles.detailMetaItem}>
+                  <Text style={styles.detailMetaLabel}>SERVICE DATE</Text>
+                  <Text style={styles.detailMetaValue}>
+                    {formatDate(
+                      selectedService?.visit_date ||
+                        selectedService?.service_date ||
+                        selectedService?.date ||
+                        selectedService?.created_at,
+                    )}
+                  </Text>
+                </View>
               </View>
 
               <TextInput
@@ -265,14 +349,36 @@ const styles = StyleSheet.create({
   selectedIndexBadgeText: {
     color: colors.white,
   },
-  serviceTitleText: {
+  serviceInfoCol: {
     flex: 1,
+  },
+  serviceTitleText: {
     fontSize: scaleFont(13),
     fontFamily: FontFamily.bold,
     color: colors.header,
   },
   selectedServiceTitleText: {
     color: colors.white,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  metaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  metaText: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.medium,
+    color: colors.grey,
+    marginLeft: 4,
+  },
+  selectedMetaText: {
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   remarksCard: {
     backgroundColor: colors.white,
@@ -294,6 +400,29 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     color: colors.header,
     marginLeft: 6,
+  },
+  detailMetaGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  detailMetaItem: {
+    flex: 1,
+  },
+  detailMetaLabel: {
+    fontSize: scaleFont(9),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    marginBottom: 2,
+  },
+  detailMetaValue: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
   },
   remarksInput: {
     backgroundColor: '#F8FAFC',
