@@ -8,8 +8,10 @@ export const navigationRef = createNavigationContainerRef();
 export const {goBack} = navigationRef;
 
 export function navigate(name: string, params?: object) {
-  //@ts-ignore
-  navigationRef?.navigate(name, params);
+  if (navigationRef.isReady()) {
+    //@ts-ignore
+    navigationRef.navigate(name, params);
+  }
 }
 
 export function replace(name: string, params?: object) {

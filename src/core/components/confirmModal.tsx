@@ -1,18 +1,21 @@
+import React from 'react';
 import {Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import colors from '../../themes/colors';
 import Modal from 'react-native-modal';
-import {scaleFont, screenHeight} from '../../utils/helper';
+import {scaleFont} from '../../utils/helper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {FontFamily} from '../../themes/fonts';
+
 interface ModalProps {
   visible: boolean;
   toggle: () => void;
   errorText: string;
   onConfirm: () => void;
 }
+
 export const ConfirmModal = (props: ModalProps) => {
   const {visible, toggle, errorText, onConfirm} = props;
-  console.log('eeeeeee', errorText);
+
   return (
     <Modal
       isVisible={visible}
@@ -21,156 +24,149 @@ export const ConfirmModal = (props: ModalProps) => {
       animationIn="slideInUp"
       animationOut="slideOutDown"
       onBackdropPress={() => toggle()}
-      backdropOpacity={0.6}>
+      backdropOpacity={0.5}>
       <View style={styles.modalContent}>
+        {/* Handle Bar */}
+        <View style={styles.handleBar} />
+
+        {/* Modal Header */}
         <View style={styles.header}>
-          <View style={styles.headingContainer}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-              <MaterialIcons name="message" color={colors.white} size={20} />
-              <Text style={styles.assetText}>MESSAGE</Text>
-            </View>
-            <TouchableOpacity style={styles.cancel} onPress={() => toggle()}>
-              <MaterialIcons
-                name="close"
-                color={colors.white}
-                size={15}
-                // style={{top: -6}}
-              />
-            </TouchableOpacity>
+          <View style={styles.titleRow}>
+            <MaterialIcons name="help-outline" color={colors.primary} size={22} />
+            <Text style={styles.headerTitle}>Confirmation Required</Text>
           </View>
+          <TouchableOpacity style={styles.closeBtn} onPress={() => toggle()}>
+            <MaterialIcons name="close" color={colors.grey} size={20} />
+          </TouchableOpacity>
         </View>
-        <View style={styles.content}>
-          <Text style={styles.error}>{errorText}</Text>
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.completeButton}
-              onPress={() => toggle()}>
-              <Text style={styles.completeText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.completeButton}
-              onPress={() => onConfirm()}>
-              <Text style={styles.completeText}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
+
+        {/* Body Message Card */}
+        <View style={styles.body}>
+          <Text style={styles.messageText}>{errorText || 'Are you sure you want to proceed?'}</Text>
+        </View>
+
+        {/* Action Buttons Row */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.cancelBtn}
+            onPress={() => toggle()}>
+            <Text style={styles.cancelBtnText}>CANCEL</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.confirmBtn}
+            onPress={() => {
+              toggle();
+              onConfirm();
+            }}>
+            <Text style={styles.confirmBtnText}>CONFIRM</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 };
+
+export default ConfirmModal;
+
 const styles = StyleSheet.create({
   modal: {
     justifyContent: 'flex-end',
-    margin: 10,
-    marginBottom: 0,
+    margin: 0,
   },
   modalContent: {
     backgroundColor: colors.white,
-    height: screenHeight * 0.25,
-    borderRadius: Platform.OS == 'ios' ? 30 : 0,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-
-  infoButton: {
-    marginHorizontal: 20,
-    backgroundColor: '#33485E',
-    borderWidth: 3,
-    borderColor: '#959595',
-    borderRadius: 12,
-    height: 45,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -4},
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
   },
-  infoButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(18),
-  },
-  assetButton: {
-    backgroundColor: colors.yellow,
-    borderWidth: 3,
-    borderColor: '#959595',
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    // paddingHorizontal: 20,
-    color: colors.primary,
-    fontSize: scaleFont(18),
-    padding: 5,
-    // marginHorizontal:20,
-    margin: 10,
-    fontFamily: FontFamily.deupRegular,
-    textAlign: 'center',
-  },
-  cancel: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  assetText: {
-    color: colors.white,
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(16),
-    marginLeft: 10,
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   header: {
-    backgroundColor: colors.primary,
-    height: 45,
-    borderRadius: 10,
-    justifyContent: 'center',
-  },
-  headingContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 15,
+    marginBottom: 16,
   },
-  icon: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.blue,
-    height: 40,
-    width: 40,
-    borderRadius: 20,
-  },
-  content: {
-    flex: 1,
-    // ßßjustifyContent: 'flex-start',
-    alignItems: 'center',
-    margin: 10,
-  },
-  error: {
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(18),
-    color: colors.black,
-  },
-  buttonContainer: {
+  titleRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: colors.header,
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(16),
+    marginLeft: 8,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  body: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  messageText: {
+    fontFamily: FontFamily.medium,
+    fontSize: scaleFont(14),
+    color: colors.header,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  completeButton: {
+  cancelBtnText: {
+    color: colors.header,
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(13),
+  },
+  confirmBtn: {
+    flex: 1,
     backgroundColor: colors.primary,
-    margin: 5,
-    padding: 12,
-    borderRadius: 10,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
   },
-  completeText: {
+  confirmBtnText: {
     color: colors.white,
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(18),
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(13),
+    letterSpacing: 0.5,
   },
 });

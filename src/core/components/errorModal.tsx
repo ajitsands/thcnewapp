@@ -1,17 +1,20 @@
+import React from 'react';
 import {Platform, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import colors from '../../themes/colors';
 import Modal from 'react-native-modal';
-import {scaleFont, screenHeight} from '../../utils/helper';
+import {scaleFont} from '../../utils/helper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {FontFamily} from '../../themes/fonts';
+
 interface ModalProps {
   visible: boolean;
   toggle: () => void;
   errorText: string;
 }
+
 export const ErrorModal = (props: ModalProps) => {
   const {visible, toggle, errorText} = props;
-  console.log('eeeeeee', errorText);
+
   return (
     <Modal
       isVisible={visible}
@@ -20,131 +23,131 @@ export const ErrorModal = (props: ModalProps) => {
       animationIn="slideInUp"
       animationOut="slideOutDown"
       onBackdropPress={() => toggle()}
-      backdropOpacity={0.6}>
+      backdropOpacity={0.5}>
       <View style={styles.modalContent}>
-        <View style={styles.header}>
-          <View style={styles.headingContainer}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}>
-              <MaterialIcons name="message" color={colors.white} size={20} />
-              <Text style={styles.assetText}>MESSAGE</Text>
-            </View>
-            <TouchableOpacity style={styles.cancel} onPress={() => toggle()}>
-              <MaterialIcons
-                name="close"
-                color={colors.white}
-                size={15}
-                // style={{top: -6}}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View style={styles.content}>
-          <View style={styles.icon}>
-            <MaterialIcons name="check" color={colors.white} size={35} />
-          </View>
+        {/* Top Handle Indicator */}
+        <View style={styles.handleBar} />
 
-          <Text style={styles.error}>{errorText}</Text>
+        {/* Modal Header */}
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <MaterialIcons name="info" color={colors.primary} size={22} />
+            <Text style={styles.headerTitle}>System Message</Text>
+          </View>
+          <TouchableOpacity style={styles.closeBtn} onPress={() => toggle()}>
+            <MaterialIcons name="close" color={colors.grey} size={20} />
+          </TouchableOpacity>
         </View>
+
+        {/* Message Content Container */}
+        <View style={styles.body}>
+          <View style={styles.iconCircle}>
+            <MaterialIcons name="notifications-active" color={colors.primary} size={24} />
+          </View>
+          <Text style={styles.messageText}>{errorText || 'Notice'}</Text>
+        </View>
+
+        {/* Dismiss Button */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.actionBtn}
+          onPress={() => toggle()}>
+          <Text style={styles.actionBtnText}>GOT IT</Text>
+        </TouchableOpacity>
       </View>
     </Modal>
   );
 };
+
+export default ErrorModal;
+
 const styles = StyleSheet.create({
   modal: {
     justifyContent: 'flex-end',
-    margin: 10,
-    marginBottom: 0,
+    margin: 0,
   },
   modalContent: {
     backgroundColor: colors.white,
-    height: screenHeight * 0.2,
-    borderRadius: Platform.OS == 'ios' ? 30 : 0,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-
-  infoButton: {
-    marginHorizontal: 20,
-    backgroundColor: '#33485E',
-    borderWidth: 3,
-    borderColor: '#959595',
-    borderRadius: 12,
-    height: 45,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -4},
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
   },
-  infoButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(18),
-  },
-  assetButton: {
-    backgroundColor: colors.yellow,
-    borderWidth: 3,
-    borderColor: '#959595',
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    // paddingHorizontal: 20,
-    color: colors.primary,
-    fontSize: scaleFont(18),
-    padding: 5,
-    // marginHorizontal:20,
-    margin: 10,
-    fontFamily: FontFamily.deupRegular,
-    textAlign: 'center',
-  },
-  cancel: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  assetText: {
-    color: colors.white,
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(16),
-    marginLeft: 10,
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   header: {
-    backgroundColor: colors.primary,
-    height: 45,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    justifyContent: 'center',
-  },
-  headingContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginHorizontal: 15,
+    marginBottom: 16,
   },
-  icon: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.blue,
-    height: 40,
-    width: 40,
-    borderRadius: 20,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
+  titleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  error: {
+  headerTitle: {
+    color: colors.header,
     fontFamily: FontFamily.bold,
     fontSize: scaleFont(16),
-    color: colors.primary,
+    marginLeft: 8,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  body: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+  },
+  iconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#E2E8F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  messageText: {
+    flex: 1,
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(13),
+    color: colors.header,
+    lineHeight: 18,
+  },
+  actionBtn: {
+    backgroundColor: colors.primary,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  actionBtnText: {
+    color: colors.white,
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(14),
+    letterSpacing: 0.5,
   },
 });

@@ -5,26 +5,25 @@ import {
   FlatList,
   Dimensions,
   StyleSheet,
-  Image,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import moment from 'moment';
 import {Header} from '../../../core/components/header';
 import colors from '../../../themes/colors';
 import {FontFamily} from '../../../themes/fonts';
 import {navigate} from '../../../navigators';
-import {scaleFont, screenHeight} from '../../../utils/helper';
+import {scaleFont} from '../../../utils/helper';
 import {useAppDispatch, useAppSelector} from '../../../store';
-import {getScheduleDates} from '../../../store/reducers/getSchedules';
 import {getScheduleSlots} from '../../../store/reducers/getSlots';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
 import {useToast} from 'react-native-toast-notifications';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 
 const screenWidth = Dimensions.get('window').width;
-const itemWidth = screenWidth - 30; // 15 + 15 margin
-const gridHeight = screenHeight * 0.7;
+const itemWidth = screenWidth - 32;
 
-const generateMonthDays = date => {
+const generateMonthDays = (date: moment.Moment) => {
   const current = date.clone().startOf('month');
   const startOfMonth = current.clone().startOf('month');
   const endOfMonth = current.clone().endOf('month');
@@ -37,74 +36,73 @@ const generateMonthDays = date => {
   const prevMonth = current.clone().subtract(1, 'month');
   const prevMonthDays = prevMonth.daysInMonth();
   for (let i = startDay - 1; i >= 0; i--) {
-    const date = prevMonth.clone().date(prevMonthDays - i);
-    days.push({date, isCurrentMonth: false});
+    const d = prevMonth.clone().date(prevMonthDays - i);
+    days.push({date: d, isCurrentMonth: false});
   }
 
   // Current month
   for (let i = 1; i <= daysInMonth; i++) {
-    const date = current.clone().date(i);
-    days.push({date, isCurrentMonth: true});
+    const d = current.clone().date(i);
+    days.push({date: d, isCurrentMonth: true});
   }
 
   // Next month overflow
   while (days.length < 42) {
-    const date = current
+    const d = current
       .clone()
       .add(1, 'month')
       .date(days.length - (startDay + daysInMonth) + 1);
-    days.push({date, isCurrentMonth: false});
+    days.push({date: d, isCurrentMonth: false});
   }
 
   return days;
 };
 
-const MonthView = ({month, markedDates}) => {
+const MonthView = ({
+  month,
+  markedDates,
+}: {
+  month: moment.Moment;
+  markedDates: Record<string, boolean>;
+}) => {
   const days = generateMonthDays(month);
   const [selectedDay, setSelectedDay] = useState(moment());
   const dispatch = useAppDispatch();
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
   const {loading} = useAppSelector(state => state.schedules);
 
-  const containerWidth = screenWidth - 30; // match your itemWidth margin
-  const headerHeight = 45; // weekday names
-  const titleBarHeight = 40; // red header above calendar
-
-  // Fully occupy screen height
-  const verticalMargin = 20;
-  const availableHeight =
-    gridHeight - headerHeight - titleBarHeight - verticalMargin;
-  const dayCellWidth = containerWidth / 7;
-  const dayCellHeight = availableHeight / 6;
-
   return (
     <View style={[styles.monthContainer, {width: itemWidth}]}>
-      <View style={[styles.weekDays, {height: headerHeight}]}>
-        {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
-          <Text key={day} style={styles.dayName}>
+      {/* Weekday Names Header */}
+      <View style={styles.weekDaysRow}>
+        {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+          <Text
+            key={day}
+            style={[
+              styles.dayName,
+              (idx === 0 || idx === 6) && styles.weekendDayName,
+            ]}>
             {day}
           </Text>
         ))}
       </View>
-      <View style={[styles.grid, {height: availableHeight}]}>
+
+      {/* Days Grid */}
+      <View style={styles.grid}>
         {days.map(({date, isCurrentMonth}, index) => {
           const formattedDate = date.format('YYYY-MM-DD');
           const isMarked = !!markedDates[formattedDate];
+          const isSelected = selectedDay.isSame(date, 'day');
+          const isToday = moment().isSame(date, 'day');
+
           return (
             <TouchableOpacity
               key={index}
+              activeOpacity={0.7}
               style={[
                 styles.dayCell,
-                {
-                  height: dayCellHeight,
-                  //  width: dayCellWidth,
-                  borderColor:
-                    selectedDay.isSame(date, 'day') && !loading
-                      ? colors.blue
-                      : colors.red,
-                  borderWidth:
-                    selectedDay.isSame(date, 'day') && !loading ? 3 : 0.7,
-                },
+                isSelected && styles.selectedDayCell,
+                !isCurrentMonth && styles.otherMonthCell,
               ]}
               onPress={() => {
                 setSelectedDay(date);
@@ -117,11 +115,28 @@ const MonthView = ({month, markedDates}) => {
                   }),
                 );
                 navigate('ScheduleSlots', {
-                  day: date.format('MMMM DD YYYY'),
+                  day: date.format('MMMM DD, YYYY'),
                 });
               }}>
-              <Text style={[styles.dayText]}>{date.date()}</Text>
-              {isMarked && !loading && <View style={styles.triangleCorner} />}
+              <Text
+                style={[
+                  styles.dayText,
+                  !isCurrentMonth && styles.otherMonthDayText,
+                  isToday && styles.todayText,
+                  isSelected && styles.selectedDayText,
+                ]}>
+                {date.date()}
+              </Text>
+
+              {/* Marked Scheduled Event Dot Badge */}
+              {isMarked && !loading && (
+                <View
+                  style={[
+                    styles.markedDot,
+                    isSelected && {backgroundColor: colors.secondary},
+                  ]}
+                />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -131,42 +146,41 @@ const MonthView = ({month, markedDates}) => {
 };
 
 export const ScheduleCalendar = () => {
-  const flatListRef = useRef(null);
-  const dispatch = useAppDispatch();
+  const flatListRef = useRef<FlatList>(null);
   const toast = useToast();
 
-  const {status, data, error, loading} = useAppSelector(
-    state => state.schedules,
-  );
+  const {data, error, loading} = useAppSelector(state => state.schedules);
   const initialIndex = 5 * 12; // middle of the range
   const [currentMonthIndex, setCurrentMonthIndex] = useState(initialIndex);
   const currentMonth = moment().startOf('month');
-  const totalMonths = 10 * 12; // 960 months
+  const totalMonths = 10 * 12;
+
   const months = Array.from({length: totalMonths}, (_, i) =>
     currentMonth
       .clone()
       .subtract(5 * 12, 'months')
       .add(i, 'months'),
   );
+
   const markedDates =
-    data?.data?.reduce((acc, schedule) => {
+    data?.data?.reduce((acc: any, schedule: any) => {
       const date = moment(schedule.visit_date).format('YYYY-MM-DD');
       acc[date] = true;
       return acc;
     }, {}) || {};
-  console.log(markedDates);
-  const handleScroll = event => {
+
+  const handleScroll = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / itemWidth);
     setCurrentMonthIndex(index);
   };
 
-  const scrollToMonth = direction => {
+  const scrollToMonth = (direction: number) => {
     const newIndex = currentMonthIndex + direction;
     if (newIndex >= 0 && newIndex < months.length) {
       flatListRef.current?.scrollToIndex({index: newIndex, animated: true});
-      // setCurrentMonthIndex(newIndex);
     }
   };
+
   useEffect(() => {
     if (error) {
       toast.show(error);
@@ -175,71 +189,77 @@ export const ScheduleCalendar = () => {
 
   return (
     <View style={styles.container}>
-      <Header />
+      <Header isHome={false} />
+      <LoadingOverlay visible={loading} />
 
-      <View style={{justifyContent: 'center', flex: 1}}>
-        <LoadingOverlay visible={loading} />
-        <View style={[styles.calendarContainer, {height: gridHeight}]}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => scrollToMonth(-1)}>
-              <Image
-                source={require('../../../assets/images/arrow.png')}
-                style={styles.arrow}
-              />
-            </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Month Navigation Control Header */}
+        <View style={styles.monthHeaderCard}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => scrollToMonth(-1)}
+            style={styles.navArrowBtn}>
+            <MaterialIcons name="chevron-left" size={26} color={colors.primary} />
+          </TouchableOpacity>
 
-            <View style={{flexDirection: 'row', alignItems: 'center'}}>
-              <Image
-                source={require('../../../assets/images/calander.png')}
-                style={[styles.arrow, {height: 15, width: 15}]}
-              />
-              <Text style={styles.headerText}>
-                Schedule Calendar -{' '}
-                {months[currentMonthIndex]?.format('MMMM YYYY')}
-                {/* Schedule Calendar - {currentMonth.format('MMMM YYYY')} */}
-              </Text>
-            </View>
-
-            <TouchableOpacity onPress={() => scrollToMonth(1)}>
-              <Image
-                source={require('../../../assets/images/arrow.png')}
-                style={[styles.arrow, {transform: [{rotate: '180deg'}]}]}
-              />
-            </TouchableOpacity>
+          <View style={styles.monthTitleWrapper}>
+            <MaterialIcons name="calendar-today" size={20} color={colors.primary} style={{marginRight: 8}} />
+            <Text style={styles.monthTitleText}>
+              {months[currentMonthIndex]?.format('MMMM YYYY')}
+            </Text>
           </View>
 
-          <View style={{flex: 1, marginHorizontal: 14}}>
-            <FlatList
-              ref={flatListRef}
-              horizontal
-              pagingEnabled
-              snapToInterval={itemWidth}
-              decelerationRate="fast"
-              showsHorizontalScrollIndicator={false}
-              data={months}
-              keyExtractor={item => item.toString()}
-              initialScrollIndex={initialIndex}
-              renderItem={({item}) => (
-                <MonthView month={item} markedDates={markedDates} />
-              )}
-              getItemLayout={(data, index) => ({
-                length: itemWidth,
-                offset: itemWidth * index,
-                index,
-              })}
-              onMomentumScrollEnd={event => {
-                const offsetX = event.nativeEvent.contentOffset.x;
-                const index = Math.round(offsetX / itemWidth);
-                setCurrentMonthIndex(index); // update title here
-              }}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              style={{width: itemWidth}}
-              contentContainerStyle={{width: itemWidth * months.length}}
-            />
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => scrollToMonth(1)}
+            style={styles.navArrowBtn}>
+            <MaterialIcons name="chevron-right" size={26} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Calendar Card Container */}
+        <View style={styles.calendarCard}>
+          <FlatList
+            ref={flatListRef}
+            horizontal
+            pagingEnabled
+            snapToInterval={itemWidth}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            data={months}
+            keyExtractor={item => item.toString()}
+            initialScrollIndex={initialIndex}
+            renderItem={({item}) => (
+              <MonthView month={item} markedDates={markedDates} />
+            )}
+            getItemLayout={(_, index) => ({
+              length: itemWidth,
+              offset: itemWidth * index,
+              index,
+            })}
+            onMomentumScrollEnd={event => {
+              const offsetX = event.nativeEvent.contentOffset.x;
+              const index = Math.round(offsetX / itemWidth);
+              setCurrentMonthIndex(index);
+            }}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={{width: itemWidth}}
+          />
+        </View>
+
+        {/* Calendar Legend Card */}
+        <View style={styles.legendCard}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, {backgroundColor: colors.red}]} />
+            <Text style={styles.legendText}>Scheduled Visit</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, {backgroundColor: colors.primary}]} />
+            <Text style={styles.legendText}>Selected Date</Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -247,85 +267,150 @@ export const ScheduleCalendar = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F4F7FA',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 30,
+  },
+  monthHeaderCard: {
     backgroundColor: colors.white,
-  },
-  calendarContainer: {
-    marginHorizontal: 15,
-    // marginVertical: 50,
-    // flex: 1,
-    borderRadius: 10,
-    backgroundColor: colors.calendar,
-    overflow: 'hidden',
-  },
-  header: {
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.red,
-    padding: 10,
-    borderTopRightRadius: 10,
-    borderTopLeftRadius: 10,
+    marginBottom: 14,
+    elevation: 3,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  navArrowBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  headerText: {
-    color: colors.white,
+  monthTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  monthTitleText: {
     fontSize: scaleFont(16),
-    fontFamily: FontFamily.medium,
-    marginLeft: 10,
+    fontFamily: FontFamily.bold,
+    color: colors.header,
   },
-
-  arrow: {
-    height: 20,
-    width: 20,
-    resizeMode: 'contain',
-    tintColor: colors.white,
-  },
-  weekDays: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    height: 45,
+  calendarCard: {
     backgroundColor: colors.white,
-    marginRight: 26,
-    marginTop: 10,
+    borderRadius: 20,
+    paddingVertical: 12,
+    elevation: 4,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    marginBottom: 14,
+  },
+  monthContainer: {
+    paddingHorizontal: 4,
+  },
+  weekDaysRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 10,
+    marginBottom: 8,
   },
   dayName: {
     flex: 1,
     textAlign: 'center',
-    color: colors.black,
-    fontSize: scaleFont(12),
-    fontFamily: FontFamily.medium,
+    color: colors.header,
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.bold,
   },
-  monthContainer: {
-    // marginHorizontal:20
-    // alignSelf: 'center',
+  weekendDayName: {
+    color: colors.red,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   dayCell: {
-    width: `${100 / 7.5}%`,
-    // width: `${100 / 7.5}%`,
-    // height: 95,
+    width: (itemWidth - 8) / 7,
+    height: 52,
     justifyContent: 'center',
     alignItems: 'center',
+    marginVertical: 2,
+    borderRadius: 12,
+    position: 'relative',
+  },
+  selectedDayCell: {
+    backgroundColor: colors.primary,
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  otherMonthCell: {
+    opacity: 0.35,
   },
   dayText: {
-    color: colors.white,
-    fontSize: scaleFont(16),
+    color: colors.header,
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.medium,
   },
-  triangleCorner: {
-    width: 0,
-    height: 0,
-    backgroundColor: 'transparent',
-    borderStyle: 'solid',
-    borderLeftWidth: 0,
-    borderRightWidth: 30,
-    borderBottomWidth: 30,
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.red,
+  otherMonthDayText: {
+    color: colors.grey,
+  },
+  todayText: {
+    color: colors.red,
+    fontFamily: FontFamily.bold,
+  },
+  selectedDayText: {
+    color: colors.white,
+    fontFamily: FontFamily.bold,
+  },
+  markedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.red,
     position: 'absolute',
-    bottom: 0,
-    left: 0,
+    bottom: 6,
+  },
+  legendCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    padding: 14,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.medium,
+    color: colors.header,
   },
 });
+
+export default ScheduleCalendar;

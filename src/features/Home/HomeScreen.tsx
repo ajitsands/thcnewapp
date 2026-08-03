@@ -3,6 +3,7 @@ import {
   FlatList,
   Image,
   Linking,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -162,39 +163,148 @@ export const HomeScreen = () => {
     <View style={styles.container}>
       <Header isHome />
 
-      <FlatList
-        numColumns={2}
-        data={items}
-        renderItem={renderListItem}
-        contentContainerStyle={styles.listContainer}
-      />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Welcome Banner / Hero Section */}
+        <View style={styles.heroCard}>
+          <View>
+            <Text style={styles.heroGreeting}>Welcome Back 👋</Text>            <Text style={styles.heroSubtext}>THC Facility Management Dashboard</Text>
+          </View>
+        </View>
+
+        {/* Section Header */}
+        <Text style={styles.sectionTitle}>Quick Services</Text>
+
+        {/* Grid Cards */}
+        <View style={styles.gridContainer}>
+          {items.map((item, index) => {
+            const isCustomerCare = item.title === 'CUSTOMER CARE';
+            return (
+              <TouchableOpacity
+                key={index}
+                activeOpacity={0.8}
+                style={[
+                  styles.itemCard,
+                  isCustomerCare && styles.fullWidthCard,
+                ]}
+                onPress={() => handleItemPress(item)}>
+                <View
+                  style={[
+                    styles.iconBadge,
+                    isCustomerCare && styles.customerCareBadge,
+                  ]}>
+                  <Image
+                    source={item.icon}
+                    style={styles.cardIcon}
+                  />
+                </View>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardSubtitle}>
+                  {isCustomerCare ? 'Get Immediate Support' : 'Tap to access'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#F4F7FA',
   },
-  listContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    flex: 1,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 30,
   },
-  itemContainer: {
+  heroCard: {
     backgroundColor: colors.primary,
-    borderRadius: 20,
-    height: 180,
-    width: screenWidth / 2 - 25,
+    borderRadius: 16,
     padding: 20,
-    margin: 10,
+    marginBottom: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  heroGreeting: {
+    fontSize: scaleFont(22),
+    fontFamily: FontFamily.bold,
+    color: colors.white,
+    marginBottom: 4,
+  },
+  heroSubtext: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  sectionTitle: {
+    fontSize: scaleFont(16),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  itemCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    width: screenWidth / 2 - 24,
+    padding: 18,
+    marginBottom: 16,
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  fullWidthCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  iconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(11, 44, 81, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  title: {
-    color: colors.white,
-    fontSize: scaleFont(20),
-    fontFamily: FontFamily.variation,
-    marginTop: 5,
+  customerCareBadge: {
+    marginBottom: 0,
+    marginRight: 16,
+    backgroundColor: 'rgba(222, 110, 0, 0.1)',
+  },
+  cardIcon: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
+    tintColor: colors.primary,
+  },
+  cardTitle: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    textAlign: 'center',
+  },
+  cardSubtitle: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });

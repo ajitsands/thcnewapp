@@ -48,7 +48,7 @@ export const Header = (props: HeaderProps) => {
         }}
         activeOpacity={1}>
         {!isHome && (
-          <SvgArrowLeft height={20} width={20} style={{marginLeft: 10}} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.white} style={{marginLeft: 10}} />
         )}
         {isProfile && (
           <Image

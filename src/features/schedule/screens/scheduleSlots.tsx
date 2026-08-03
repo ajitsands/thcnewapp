@@ -1,138 +1,119 @@
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  Image,
   StyleSheet,
   ScrollView,
 } from 'react-native';
 import {Header} from '../../../core/components/header';
 import colors from '../../../themes/colors';
 import {FontFamily} from '../../../themes/fonts';
-import {act, useEffect, useState} from 'react';
-import moment from 'moment';
-import {scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
-import {navigate} from '../../../navigators';
+import {scaleFont} from '../../../utils/helper';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {useToast} from 'react-native-toast-notifications';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
 import {getTicketDetails} from '../../../store/reducers/getTicketDetails';
 import {selectedSlots} from '../../../store/reducers/getSlots';
-
-const NUM_COLUMNS = 4;
-const TOTAL_SLOTS = 24;
-const NUM_ROWS = Math.ceil(TOTAL_SLOTS / NUM_COLUMNS);
+import MaterialIcons from '@react-native-vector-icons/material-icons';
 
 export const ScheduleSlots = ({route}: any) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedDay, setSelectedDay] = useState(moment().date());
-  const [errorText, setErrorText] = useState('');
-  const currentDate = route?.params?.day;
-
-  const gridHeight = screenHeight * 0.7; // container height
-  const gridWidth = screenWidth - 50; // subtract padding/margin if needed
-  const headerHeight = 50; // adjust if needed
-  const weekDaysHeight = 50; // adjust if needed
-
-  const availableGridHeight = gridHeight - headerHeight - weekDaysHeight;
-  const cellWidth = gridWidth / NUM_COLUMNS;
-  const cellHeight = availableGridHeight / NUM_ROWS;
-
+  const currentDate = route?.params?.day || 'Selected Date';
   const {data, loading, error, status} = useAppSelector(state => state.slots);
   const {employeeCode, apiKey} = useAppSelector(state => state.app);
-  const {visitDate} = useAppSelector(state => state.slots);
   const slots = data?.data || {};
   const toast = useToast();
   const dispatch = useAppDispatch();
-  const activeSlots: any = [];
+
   useEffect(() => {
-    if (status == 'failed') {
-      setErrorText(error);
+    if (status === 'failed' && error) {
       toast.show(error);
     }
   }, [status, error]);
 
   const getJobDetails = (visitId: any) => {
-    console.log(visitId);
     dispatch(
       getTicketDetails({
         action: 'get_amc_ticket_details',
         emp_code: employeeCode,
         APIKEY: apiKey,
-        visit_date: slots[0].slot_date,
+        visit_date: slots[0]?.slot_date,
         amc_ticket_ref_no: visitId,
       }),
     );
   };
 
-  useEffect(() => {
-    if (slots.length > 0) {
-      const activeSlots = [];
-
-      for (let i = 1; i <= 24; i++) {
-        const slotKey = `slot_${i}`;
-        if (slots[0]?.[slotKey] && slots[0][slotKey] !== '0') {
-          activeSlots.push(i);
-        }
-      }
-
-      console.log('Active Slots:', activeSlots);
-      // dispatch(selectedSlots({ slots: activeSlots,visitDate:slots[0].slot_date }));
-    }
-  }, [slots]);
-
-  // console.log(data.data[0].employee_code)
   return (
     <View style={styles.container}>
-      <Header />
-      <View style={{flex: 1, justifyContent: 'center'}}>
-        <View style={[styles.calendarContainer, {height: gridHeight}]}>
-          <View style={styles.header}>
-            <Image
-              source={require('../../../assets/images/calander.png')}
-              style={styles.arrow}
-            />
-            <Text style={styles.headerText}>{currentDate}</Text>
-          </View>
+      <Header isHome={false} />
+      <LoadingOverlay visible={loading} />
 
-          <View style={styles.weekDays}>
-            <Text style={styles.dayName}>SCHEDULE SLOTS</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Selected Date Header Banner */}
+        <View style={styles.dateHeaderCard}>
+          <MaterialIcons name="event" size={24} color={colors.primary} />
+          <View style={styles.dateInfo}>
+            <Text style={styles.dateSubTitle}>SCHEDULED SLOTS FOR</Text>
+            <Text style={styles.dateTitleText}>{currentDate}</Text>
           </View>
+        </View>
 
-          <View style={[styles.slotContainer, {width: gridWidth}]}>
-            <LoadingOverlay visible={loading} />
+        {/* Slots Grid Container */}
+        <View style={styles.slotsCard}>
+          <Text style={styles.sectionTitle}>24-Hour Time Slots</Text>
+          <Text style={styles.sectionSubtitle}>
+            Tap a highlighted slot to view job ticket details
+          </Text>
+
+          <View style={styles.grid}>
             {Array.from({length: 24}).map((_, i) => {
               const slotKey = `slot_${i + 1}`;
-              const isActive = slots[0]?.[slotKey] != 0;
+              const isActive = slots[0]?.[slotKey] && slots[0]?.[slotKey] !== '0';
+              const visitId = slots[0]?.[slotKey];
+
               return (
                 <TouchableOpacity
                   key={i}
+                  activeOpacity={isActive ? 0.75 : 1}
                   onPress={() => {
                     if (isActive) {
                       dispatch(
                         selectedSlots({
                           slots: i + 1,
-                          visitDate: slots[0].slot_date,
+                          visitDate: slots[0]?.slot_date,
                         }),
                       );
-                      getJobDetails(slots[0]?.[slotKey]);
+                      getJobDetails(visitId);
                     }
                   }}
-                  style={[styles.cell, {width: cellWidth, height: cellHeight}]}
-                  activeOpacity={1}>
-                  <Text style={[styles.dayText,{fontSize:scaleFont(16)}]}>{i + 1}</Text>
-                  {isActive && !error && !loading && (
-                    <View style={styles.rectangle}>
-                      <Text style={[styles.dayText,{bottom:1 }]}>{slots[0]?.[slotKey]}</Text>
+                  style={[
+                    styles.slotCell,
+                    isActive && styles.activeSlotCell,
+                  ]}>
+                  <Text
+                    style={[
+                      styles.slotNumber,
+                      isActive && styles.activeSlotNumber,
+                    ]}>
+                    Slot {i + 1}
+                  </Text>
+
+                  {isActive ? (
+                    <View style={styles.activeBadge}>
+                      <MaterialIcons name="assignment" size={12} color={colors.white} />
+                      <Text style={styles.activeBadgeText} numberOfLines={1}>
+                        #{visitId}
+                      </Text>
                     </View>
+                  ) : (
+                    <Text style={styles.vacantText}>Available</Text>
                   )}
                 </TouchableOpacity>
               );
             })}
           </View>
-          {/* <View style={{padding:5}}/> */}
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -140,93 +121,113 @@ export const ScheduleSlots = ({route}: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F4F7FA',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 30,
+  },
+  dateHeaderCard: {
     backgroundColor: colors.white,
-  },
-  header: {
+    borderRadius: 16,
+    padding: 16,
     flexDirection: 'row',
-    justifyContent: 'center',
-    backgroundColor: colors.red,
-    padding: 10,
-    borderTopRightRadius: 10,
-    borderTopLeftRadius: 10,
     alignItems: 'center',
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
   },
-  headerText: {
-    color: colors.white,
+  dateInfo: {
+    marginLeft: 12,
+  },
+  dateSubTitle: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    letterSpacing: 0.5,
+  },
+  dateTitleText: {
     fontSize: scaleFont(16),
     fontFamily: FontFamily.bold,
-    marginLeft: 10,
+    color: colors.header,
+    marginTop: 2,
   },
-  arrow: {
-    height: 15,
-    width: 15,
-    resizeMode: 'contain',
-    tintColor: colors.white,
-  },
-  weekDays: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    height: 30,
+  slotsCard: {
     backgroundColor: colors.white,
-    marginHorizontal: 10,
-    marginBottom:10
+    borderRadius: 20,
+    padding: 16,
+    elevation: 4,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  dayName: {
-    flex: 1,
-    textAlign: 'center',
-    color: colors.black,
-    fontSize: scaleFont(14),
+  sectionTitle: {
+    fontSize: scaleFont(16),
     fontFamily: FontFamily.bold,
+    color: colors.header,
   },
-  weekRow: {
-    flexDirection: 'row',
-    marginHorizontal: 10,
-    flex: 1,
+  sectionSubtitle: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginBottom: 16,
   },
-  dayCell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderColor: colors.red,
-    borderWidth: 0.5,
-  },
-  dayText: {color: colors.white,fontSize:scaleFont(10)},
-  calendarContainer: {
-    marginHorizontal: 15,
-    borderRadius: 10,
-    backgroundColor: colors.calendar,
-    overflow: 'hidden',
-  },
-  cell: {
-    // width: cellSize,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: .6,
-    borderColor: colors.red,
-  },
-  slotContainer: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: 10,
-    // marginVertical:40
-
-    //  flex: 1,
+    justifyContent: 'space-between',
   },
-  rectangle: {
-    width: '100%',
-    height: 15,
-    backgroundColor: colors.red,
-    borderStyle: 'solid',
-    borderLeftWidth: 0,
-    borderRightColor: 'transparent',
-    borderBottomColor: colors.red,
-    position: 'absolute',
-    bottom: 0,
-    justifyContent: 'flex-start',
+  slotCell: {
+    width: '23%',
+    height: 64,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 10,
+    justifyContent: 'center',
     alignItems: 'center',
-   
-   
+    padding: 4,
+  },
+  activeSlotCell: {
+    backgroundColor: 'rgba(11, 44, 81, 0.06)',
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+  },
+  slotNumber: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+  },
+  activeSlotNumber: {
+    color: colors.primary,
+  },
+  vacantText: {
+    fontSize: scaleFont(9),
+    fontFamily: FontFamily.regular,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  activeBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    maxWidth: '100%',
+  },
+  activeBadgeText: {
+    color: colors.white,
+    fontSize: scaleFont(9),
+    fontFamily: FontFamily.bold,
+    marginLeft: 2,
   },
 });
+
+export default ScheduleSlots;

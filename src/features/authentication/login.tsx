@@ -89,81 +89,81 @@ const LoginScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
-            contentContainerStyle={{flexGrow: 1}}
-            keyboardShouldPersistTaps="handled">
-            <View style={styles.contentContainer}>
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            
+            {/* Logo Section */}
+            <View style={styles.logoContainer}>
               <Image
                 source={require('../../assets/images/thc_logo.png')}
                 style={styles.logo}
               />
             </View>
 
-            <TextInput
-              placeholder="Employee id"
-              placeholderTextColor={colors.grey}
-              style={[
-                styles.input,
-                {
-                  borderColor: employeeIdError
-                    ? colors.red
-                    : isFocused === 1
-                    ? colors.blue
-                    : colors.grey,
-                },
-              ]}
-              onFocus={() => setIsFocused(1)}
-              onBlur={() => setIsFocused(2)}
-              onChangeText={text => {
-                setEmployeeId(text);
-                if (!text.trim()) {
-                  setEmployeeIdError('Please enter a valid Employee id.');
-                } else {
-                  setEmployeeIdError('');
-                }
-              }}
-            />
-            {employeeIdError ? (
-              <Text style={styles.errorText}>{employeeIdError}</Text>
-            ) : null}
+            {/* Login Form Card */}
+            <View style={styles.formCard}>
+              <Text style={styles.welcomeTitle}>Welcome Back</Text>
+              <Text style={styles.welcomeSub}>Sign in to manage your facility services</Text>
 
-            <TextInput
-              placeholder="Password"
-              secureTextEntry
-              placeholderTextColor={colors.grey}
-              style={[
-                styles.input,
-                {
-                  borderColor: passwordError
-                    ? colors.red
-                    : isFocused === 2
-                    ? colors.blue
-                    : colors.grey,
-                },
-              ]}
-              onFocus={() => setIsFocused(2)}
-              onBlur={() => setIsFocused(1)}
-              onChangeText={text => {
-                setPassword(text);
-                if (!text.trim() || text.length < 4) {
-                  setPasswordError(
-                    'Use 4 Characters or more for your password',
-                  );
-                } else {
-                  setPasswordError('');
-                }
-              }}
-            />
-            {passwordError ? (
-              <Text style={styles.errorText}>{passwordError}</Text>
-            ) : null}
+              {/* Employee ID Field */}
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="person" size={22} color={colors.primary} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="Employee ID"
+                  placeholderTextColor={colors.grey}
+                  style={styles.input}
+                  onFocus={() => setIsFocused(1)}
+                  onBlur={() => setIsFocused(0)}
+                  onChangeText={text => {
+                    setEmployeeId(text);
+                    if (!text.trim()) {
+                      setEmployeeIdError('Please enter a valid Employee ID.');
+                    } else {
+                      setEmployeeIdError('');
+                    }
+                  }}
+                />
+              </View>
+              {employeeIdError ? (
+                <Text style={styles.errorText}>{employeeIdError}</Text>
+              ) : null}
 
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => handleLogin()}>
-              <MaterialIcons name="login" size={20} color={colors.white} />
-              {/* <Image source={require('../../assets/images/2.0x/triangle.png')} style={styles.icon}/> */}
-              <Text style={styles.title}>Login</Text>
-            </TouchableOpacity>
+              {/* Password Field */}
+              <View style={styles.inputWrapper}>
+                <MaterialIcons name="lock" size={22} color={colors.primary} style={styles.inputIcon} />
+                <TextInput
+                  placeholder="Password"
+                  secureTextEntry
+                  placeholderTextColor={colors.grey}
+                  style={styles.input}
+                  onFocus={() => setIsFocused(2)}
+                  onBlur={() => setIsFocused(0)}
+                  onChangeText={text => {
+                    setPassword(text);
+                    if (!text.trim() || text.length < 4) {
+                      setPasswordError(
+                        'Use 4 characters or more for your password',
+                      );
+                    } else {
+                      setPasswordError('');
+                    }
+                  }}
+                />
+              </View>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.button}
+                onPress={() => handleLogin()}>
+                <MaterialIcons name="login" size={22} color={colors.white} />
+                <Text style={styles.title}>LOG IN</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -178,55 +178,96 @@ const LoginScreen = () => {
   );
 };
 export default LoginScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#F4F7FA',
   },
-  contentContainer: {
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    justifyContent: 'center',
+  },
+  logoContainer: {
     alignItems: 'center',
-    marginTop: 30,
+    marginVertical: 20,
+  },
+  logo: {
+    height: 140,
+    width: 140,
+    resizeMode: 'contain',
+  },
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 24,
+    elevation: 4,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  welcomeTitle: {
+    fontSize: scaleFont(22),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  welcomeSub: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginVertical: 8,
+    paddingHorizontal: 14,
+    height: 56,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.medium,
+    color: colors.black,
   },
   errorText: {
     color: colors.red,
-    marginLeft: 22,
-    fontSize: scaleFont(12),
-    marginBottom: 5,
-  },
-
-  logo: {
-    height: 200,
-    width: 200,
-    resizeMode: 'contain',
-  },
-  input: {
-    height: 60,
-    borderWidth: 2,
-    borderColor: colors.grey,
-    marginVertical: 10,
-    marginHorizontal: 20,
-    borderRadius: 5,
-    color: colors.black,
+    marginLeft: 6,
+    fontSize: scaleFont(11),
+    marginBottom: 6,
   },
   button: {
     backgroundColor: colors.primary,
-    marginHorizontal: 20,
-    height: 50,
+    height: 54,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
     marginTop: 20,
-    borderRadius: 5,
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
   },
   title: {
-    fontSize: scaleFont(14),
-    fontFamily: FontFamily.medium,
+    fontSize: scaleFont(15),
+    fontFamily: FontFamily.bold,
     color: colors.white,
-    marginLeft: 5,
-  },
-  icon: {
-    height: 30,
-    width: 30,
-    resizeMode: 'contain',
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
 });

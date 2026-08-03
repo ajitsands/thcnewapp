@@ -1,3 +1,4 @@
+import React, {useEffect, useRef, useState} from 'react';
 import {
   Image,
   Animated,
@@ -11,54 +12,43 @@ import colors from '../../../themes/colors';
 import {Header} from '../../../core/components/header';
 import {HeaderBar} from '../../../core/components/headerBar';
 import {FontFamily} from '../../../themes/fonts';
-import {useEffect, useRef, useState} from 'react';
 import {scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {
   getAssetDetails,
   resetError,
 } from '../../../store/reducers/assetReducers/getAssetDetails';
-import {Loader} from '../../../core/components/loader';
 import {useToast} from 'react-native-toast-notifications';
-import {navigate} from '../../../navigators';
 import {navigationRef} from '../../../navigators/navRef';
 import {ImageView} from '../../../core/components/imageView';
 import {AssetServices} from './assetServices';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+
 interface AssetProps {
   route: any;
 }
 
 export const AssetDetails = (props: AssetProps) => {
   const {route} = props;
-  const assetCode = route?.params?.assetCode;
-  console.log(assetCode);
+  const assetCode = route?.params?.assetCode || '';
   const [pageNumber, setPageNumber] = useState(0);
   const [serviceImage, setServiceImage] = useState('');
+  
   const {assets, assetsLoading, assetsError, assetsStatus} = useAppSelector(
     state => state.assetDetails,
   );
   const {
     assetServicesImages,
-    assetServiceImagesError,
     assetServiceImagesStatus,
   } = useAppSelector(state => state.assetDetails);
+  
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
   const assetDetails = assets?.data[0];
-  console.log("PPPP",assetDetails)
   const [showImageModal, setShowImageModal] = useState(false);
   const dispatch = useAppDispatch();
   const toast = useToast();
   const translateX = useRef(new Animated.Value(0)).current;
-
-  const AssetItem = ({title, value}: any) => (
-    <View style={styles.assetItem}>
-      <Text style={styles.assetTitle}>{title}</Text>
-      <View style={styles.textBox}>
-        <Text style={styles.assetValue}>{value}</Text>
-      </View>
-    </View>
-  );
 
   useEffect(() => {
     dispatch(
@@ -69,9 +59,10 @@ export const AssetDetails = (props: AssetProps) => {
         asset_code: assetCode.trim(),
       }),
     );
-  }, []);
+  }, [assetCode]);
+
   useEffect(() => {
-    if (assetsStatus == 'failed' && assetsError) {
+    if (assetsStatus === 'failed' && assetsError) {
       navigationRef.goBack();
       toast.show(assetsError);
       dispatch(resetError());
@@ -79,37 +70,74 @@ export const AssetDetails = (props: AssetProps) => {
   }, [assetsStatus]);
 
   const handleSlide = (newPage: number) => {
-    if (newPage < 0 || newPage > 1) return; // prevent overflow
+    if (newPage < 0 || newPage > 1) return;
     Animated.timing(translateX, {
       toValue: -screenWidth * newPage,
-      duration: 300,
+      duration: 250,
       useNativeDriver: true,
     }).start();
     setPageNumber(newPage);
   };
 
+  const FieldRow = ({label, value, icon}: {label: string; value?: string; icon?: string}) => (
+    <View style={styles.fieldItem}>
+      {icon && <MaterialIcons name={icon} size={16} color={colors.primary} style={{marginRight: 6}} />}
+      <View style={{flex: 1}}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <Text style={styles.fieldValue}>{value || 'N/A'}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <View style={{marginVertical: 20, flex: 1}}>
-        <HeaderBar title="ASSET DETAILS" isAssetDetails={true} />
-        <ScrollView style={[styles.historyList, {flex: pageNumber == 0 ? 1 : 0}]}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => handleSlide(pageNumber - 1)}>
-              <Image
-                source={require('../../../assets/images/arrow.png')}
-                style={styles.arrow}
-              />
-            </TouchableOpacity>
+      <LoadingOverlay visible={assetsLoading} />
 
-            <Text style={styles.title}>{`ASSET NO:${assetCode}`}</Text>
-            <TouchableOpacity onPress={() => handleSlide(pageNumber + 1)}>
-              <Image
-                source={require('../../../assets/images/arrow.png')}
-                style={[styles.arrow, {transform: [{rotate: '180deg'}]}]}
-              />
-            </TouchableOpacity>
-          </View>
+      <View style={styles.mainWrapper}>
+        <HeaderBar title="ASSET DETAILS" isAssetDetails={true} />
+
+        {/* Tab Segment Controls */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.tabButton, pageNumber === 0 && styles.tabButtonActive]}
+            onPress={() => handleSlide(0)}>
+            <MaterialIcons
+              name="info"
+              size={18}
+              color={pageNumber === 0 ? colors.white : colors.primary}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                pageNumber === 0 && styles.tabTextActive,
+              ]}>
+              Basic Details
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.tabButton, pageNumber === 1 && styles.tabButtonActive]}
+            onPress={() => handleSlide(1)}>
+            <MaterialIcons
+              name="build"
+              size={18}
+              color={pageNumber === 1 ? colors.white : colors.primary}
+            />
+            <Text
+              style={[
+                styles.tabText,
+                pageNumber === 1 && styles.tabTextActive,
+              ]}>
+              Asset Services
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Sliding Content Pages */}
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View
             style={[
               styles.slider,
@@ -117,119 +145,150 @@ export const AssetDetails = (props: AssetProps) => {
                 transform: [{translateX}],
               },
             ]}>
-            {/* {assetsLoading ? (
-              <Loader />
-            ) : ( */}
-            <View style={{flex: 1, margin: 5, marginTop: 10}}>
-              <View style={styles.row}>
-                <AssetItem
-                  title="CUSTOMER NAME"
-                  value={assetDetails?.customer_name}
-                />
-                <AssetItem title="CODE" value={assetDetails?.customer_code} />
+            {/* PAGE 0: BASIC DETAILS */}
+            <View style={styles.pageCard}>
+              {/* Asset Hero Header */}
+              <View style={styles.heroBanner}>
+                <TouchableOpacity
+                  disabled={pageNumber === 0}
+                  onPress={() => handleSlide(pageNumber - 1)}
+                  style={styles.arrowButton}>
+                  <MaterialIcons name="chevron-left" size={26} color={colors.white} />
+                </TouchableOpacity>
+
+                <View style={styles.heroInfo}>
+                  <Text style={styles.heroBadgeTitle}>ASSET NUMBER</Text>
+                  <Text style={styles.heroCodeText}>{assetCode}</Text>
+                </View>
+
+                <TouchableOpacity
+                  disabled={pageNumber === 1}
+                  onPress={() => handleSlide(pageNumber + 1)}
+                  style={styles.arrowButton}>
+                  <MaterialIcons name="chevron-right" size={26} color={colors.white} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="LOCATION"
-                  value={assetDetails?.asset_location}
-                />
-              </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="BUILDING"
-                  value={assetDetails?.asset_building}
-                />
-              </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="ZONE/FLOOR NO"
-                  value={assetDetails?.zone_floor}
-                />
-                <LoadingOverlay visible={assetsLoading} />
-                <AssetItem
-                  title="FLAT NO/AREA CODE"
-                  value={assetDetails?.flat_area_code}
-                />
-                <AssetItem title="ROOM NUMBER" value={assetDetails?.room_no} />
-              </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="CATEGORY"
-                  value={assetDetails?.asset_category_name}
-                />
-                <AssetItem title="TYPE" value={assetDetails?.asset_type_name} />
-                {/* Add more fields if needed */}
-              </View>
-              <View style={styles.row}>
-                <AssetItem title="BRAND" value={assetDetails?.asset_brand} />
-                <AssetItem
-                  title="MODEL NO"
-                  value={assetDetails?.asset_serial_no}
-                />
-                {/* Add more fields if needed */}
-              </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="WARRANTY/GUARANTEE"
-                  value={assetDetails?.is_warentee}
-                />
-                <AssetItem
-                  title="DATE UPTO"
-                  value={assetDetails?.warentee_end_date}
-                />
-                <AssetItem
-                  title="CAPACITY"
-                  value={assetDetails?.asset_capacity}
-                />
-                {/* Add more fields if needed */}
-              </View>
-              <View style={styles.row}>
-                <AssetItem
-                  title="DESCRIPTION"
-                  value={assetDetails?.asset_description}
-                />
-                <View style={styles.imageContainer}>
+
+              {/* Attachment Image Preview Card */}
+              {assetDetails?.asset_attachment ? (
+                <View style={styles.attachmentCard}>
+                  <Text style={styles.sectionHeaderTitle}>ASSET PHOTO</Text>
                   <TouchableOpacity
-                    style={styles.sliceContainer}
+                    activeOpacity={0.85}
+                    style={styles.photoContainer}
                     onPress={() => setShowImageModal(true)}>
                     <Image
-                      style={styles.fullCircle}
                       source={{uri: assetDetails?.asset_attachment}}
+                      style={styles.photoImage}
                     />
+                    <View style={styles.zoomBadge}>
+                      <MaterialIcons name="zoom-in" size={18} color={colors.white} />
+                      <Text style={styles.zoomText}>View</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
+              ) : null}
+
+              {/* Section 1: Customer & Location */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionTitleRow}>
+                  <MaterialIcons name="location-on" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Location & Customer</Text>
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="CUSTOMER NAME" value={assetDetails?.customer_name} />
+                  <FieldRow label="CUSTOMER CODE" value={assetDetails?.customer_code} />
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="BUILDING" value={assetDetails?.asset_building} />
+                  <FieldRow label="LOCATION" value={assetDetails?.asset_location} />
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="ZONE / FLOOR" value={assetDetails?.zone_floor} />
+                  <FieldRow label="FLAT / AREA CODE" value={assetDetails?.flat_area_code} />
+                  <FieldRow label="ROOM NO" value={assetDetails?.room_no} />
+                </View>
               </View>
+
+              {/* Section 2: Asset Specifications */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionTitleRow}>
+                  <MaterialIcons name="category" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Specifications</Text>
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="CATEGORY" value={assetDetails?.asset_category_name} />
+                  <FieldRow label="TYPE" value={assetDetails?.asset_type_name} />
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="BRAND" value={assetDetails?.asset_brand} />
+                  <FieldRow label="MODEL / SERIAL NO" value={assetDetails?.asset_serial_no} />
+                  <FieldRow label="CAPACITY" value={assetDetails?.asset_capacity} />
+                </View>
+              </View>
+
+              {/* Section 3: Warranty Details */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionTitleRow}>
+                  <MaterialIcons name="verified" size={20} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Warranty Status</Text>
+                </View>
+                <View style={styles.gridRow}>
+                  <FieldRow label="WARRANTY / GUARANTEE" value={assetDetails?.is_warentee} />
+                  <FieldRow label="END DATE" value={assetDetails?.warentee_end_date} />
+                </View>
+              </View>
+
+              {/* Section 4: Description */}
+              {assetDetails?.asset_description ? (
+                <View style={styles.sectionCard}>
+                  <View style={styles.sectionTitleRow}>
+                    <MaterialIcons name="description" size={20} color={colors.primary} />
+                    <Text style={styles.sectionTitle}>Description</Text>
+                  </View>
+                  <Text style={styles.descriptionText}>
+                    {assetDetails?.asset_description}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-            {/* )} */}
-            {/* </View> */}
-            <View style={styles.page}>
-              {pageNumber == 1 && <AssetServices code={assetCode} />}
+
+            {/* PAGE 1: ASSET SERVICES */}
+            <View style={styles.pageCard}>
+              <AssetServices code={assetCode} />
             </View>
           </Animated.View>
         </ScrollView>
-        {pageNumber == 1 && assetServiceImagesStatus == 'success' && (
-          <View style={{flexDirection: 'row', justifyContent: 'center'}}>
-            {assetServicesImages?.data?.map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => {
-                  setShowImageModal(true);
-                  setServiceImage(item.service_image_name);
-                }}>
-                <Image
-                  source={{uri: item.service_image_name}}
-                  style={styles.images}
-                />
-              </TouchableOpacity>
-            ))}
+
+        {/* Service Gallery Images Footer */}
+        {pageNumber === 1 && assetServiceImagesStatus === 'success' && (
+          <View style={styles.galleryContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {assetServicesImages?.data?.map((item: any, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setShowImageModal(true);
+                    setServiceImage(item.service_image_name);
+                  }}>
+                  <Image
+                    source={{uri: item.service_image_name}}
+                    style={styles.galleryImage}
+                  />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         )}
       </View>
+
+      {/* Image Modal Viewer */}
       {showImageModal && (
         <ImageView
           visible={showImageModal}
           imageUrl={
-            pageNumber == 0 ? assetDetails?.asset_attachment : serviceImage
+            pageNumber === 0 ? assetDetails?.asset_attachment : serviceImage
           }
           toggle={() => setShowImageModal(false)}
         />
@@ -237,118 +296,215 @@ export const AssetDetails = (props: AssetProps) => {
     </View>
   );
 };
+
+export default AssetDetails;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#F4F7FA',
   },
-  historyList: {
-    marginHorizontal: 10,
-      flex: 1,
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
-    borderTopLeftRadius: 10,
-    marginBottom: 20,
-  },
-  header: {
-    backgroundColor: colors.yellow,
-    height: 40,
-    flexDirection: 'row',
-    padding: 10,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    // borderWidth:1,
-    borderColor: colors.primary,
-    borderTopLeftRadius: 10,
-  },
-  title: {
-    fontFamily: FontFamily.duepBold,
-    color: colors.primary,
-    fontSize: scaleFont(16),
-  },
-  arrow: {
-    height: 20,
-    width: 20,
-    resizeMode: 'contain',
-    tintColor: colors.primary,
-  },
-  pageContainer: {
-    padding: 10,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-
-    // gap: 10,
-    //  marginBottom: 8,
-  },
-  assetItem: {
+  mainWrapper: {
     flex: 1,
-    marginBottom: 8,
-    marginHorizontal: 5,
   },
-  assetTitle: {
-    color: colors.white,
-    // marginBottom:5,
-    fontFamily: FontFamily.variation,
-    fontSize: scaleFont(12),
-    width: '100%',
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 6,
+    borderRadius: 14,
+    padding: 4,
   },
-  assetValue: {
-    color: colors.white,
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(14),
-    marginLeft: 5,
-  },
-  textBox: {
-    padding:5,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: colors.white,
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
-  },
-  imageContainer: {
-    height: 70,
-    width: 70,
-    borderRadius: 35,
-    backgroundColor: colors.blue,
-    borderWidth: 1,
-    borderColor: colors.white,
-    justifyContent: 'center',
-     alignItems: 'center',
-    marginTop:15
-  },
-  slicedImage: {
-    width: 70, // Diameter of the circle
-    height: 50,
-    borderRadius: 35, // Height of the visible slice
-  },
-  sliceContainer: {
-    width: 70, // Diameter of the circle
-    height: 40, // Height of the visible slice
-    overflow: 'hidden', // Clips the top and bottom
     alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: 15,
   },
-  fullCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35, // Perfect circle
+  tabButtonActive: {
+    backgroundColor: colors.primary,
+    elevation: 2,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  tabText: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.primary,
+    marginLeft: 6,
+  },
+  tabTextActive: {
+    color: colors.white,
+  },
+  scrollContent: {
+    paddingBottom: 30,
   },
   slider: {
     flexDirection: 'row',
     width: screenWidth * 2,
   },
-  page: {
-    width: screenWidth,
-    height: '100%',
-    marginHorizontal: 10,
+  pageCard: {
+    width: screenWidth - 32,
+    marginHorizontal: 16,
   },
-  images: {
-    height: 50,
-    width: 50,
-    borderRadius: 25,
-    marginHorizontal: 2,
+  heroBanner: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  arrowButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroInfo: {
+    alignItems: 'center',
+  },
+  heroBadgeTitle: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.bold,
+    color: colors.secondary,
+    letterSpacing: 0.5,
+  },
+  heroCodeText: {
+    fontSize: scaleFont(15),
+    fontFamily: FontFamily.bold,
+    color: colors.white,
+    marginTop: 2,
+  },
+  attachmentCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  sectionHeaderTitle: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    marginBottom: 10,
+  },
+  photoContainer: {
+    height: 140,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F1F5F9',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  zoomBadge: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(11, 44, 81, 0.8)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  zoomText: {
+    color: colors.white,
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.medium,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 8,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: scaleFont(15),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginLeft: 8,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  fieldItem: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginHorizontal: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fieldLabel: {
+    fontSize: scaleFont(9),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    marginBottom: 2,
+  },
+  fieldValue: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  descriptionText: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.regular,
+    color: colors.header,
+    lineHeight: 20,
+  },
+  galleryContainer: {
+    backgroundColor: colors.white,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  galleryImage: {
+    height: 56,
+    width: 56,
+    borderRadius: 10,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
 });

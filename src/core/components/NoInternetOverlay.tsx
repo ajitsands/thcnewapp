@@ -8,17 +8,29 @@ import {useToast} from 'react-native-toast-notifications';
 export const NoInternetOverlay = () => {
   const [isConnected, setIsConnected] = useState(true);
   const toast = useToast();
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected && state.isInternetReachable);
+      const connected = Boolean(state.isConnected && (state.isInternetReachable ?? true));
+      setIsConnected(connected);
     });
 
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!isConnected && toast) {
+      toast.show('No Internet Connection');
+    }
+  }, [isConnected]);
+
   if (isConnected) return null;
-  console.log('connected', isConnected);
-  toast.show('No Internet Connection');
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.text}>No Internet Connection</Text>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({

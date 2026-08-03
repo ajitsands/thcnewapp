@@ -4,44 +4,42 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Vibration,
+  Platform,
 } from 'react-native';
 import {Camera} from 'react-native-camera-kit';
-import {useNavigation} from '@react-navigation/native';
 import {Header} from '../../../core/components/header';
 import colors from '../../../themes/colors';
 import {scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
 import AssetModal from '../components/assetModal';
 import {navigate} from '../../../navigators';
 import {useIsFocused} from '@react-navigation/native';
-const frameSize = 250;
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+import {FontFamily} from '../../../themes/fonts';
+
+const frameSize = 260;
+
 export const QRScannerScreen = () => {
   const [qrValue, setQrValue] = useState('');
   const [flashOn, setFlashOn] = useState(false);
   const [visible, setVisible] = useState(false);
-  const lastTap = useRef(0);
-  const isFocused=useIsFocused()
-  const onReadCode = (event:any) => {
+  const isFocused = useIsFocused();
+
+  const onReadCode = (event: any) => {
     if (qrValue !== event.nativeEvent.codeStringValue) {
-      Vibration.vibrate();
+      Vibration.vibrate(100);
       setQrValue(event.nativeEvent.codeStringValue);
     }
   };
+
   const toggleFlashlight = () => {
-    const now = Date.now();
-    if (now - lastTap.current < 300) {
-      // Detected double tap within 300ms
-      setFlashOn(prev => !prev);
-    }
-    lastTap.current = now;
+    setFlashOn(prev => !prev);
   };
+
   const goToAssetDetails = () => {
-    console.log('bbb',qrValue);
     if (qrValue) {
       navigate('AssetDetails', {assetCode: qrValue});
-    }
-     else {
+    } else {
       navigate('AssetDetails', {assetCode: 'THC-C0001-CY-1001-0YW'});
     }
   };
@@ -49,58 +47,87 @@ export const QRScannerScreen = () => {
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <View style={styles.scannerWrapper}>
-        {isFocused&&
-        <Camera
-          style={StyleSheet.absoluteFill}
-          // showFrame={true}
-          scanBarcode={true}
-          laserColor={'#FFD81F'}
-          frameColor={'#0B2C51'}
-          onReadCode={onReadCode}
-          torchMode={flashOn ? 'on' : 'off'}
-        />
-        }
-        <View style={[styles.mask, {height: (screenHeight - frameSize) / 2}]} />
 
-        {/* Middle Section with Cutout */}
+      {/* Main Camera & Viewfinder Container */}
+      <View style={styles.scannerWrapper}>
+        {isFocused && (
+          <Camera
+            style={StyleSheet.absoluteFill}
+            scanBarcode={true}
+            laserColor={colors.secondary}
+            frameColor={colors.primary}
+            onReadCode={onReadCode}
+            torchMode={flashOn ? 'on' : 'off'}
+          />
+        )}
+
+        {/* Semi-transparent Overlay Masks */}
+        <View style={styles.topMask} />
+
         <View style={styles.middleRow}>
-          {/* Left Mask */}
-          <View style={styles.side} />
+          <View style={styles.sideMask} />
+          
+          {/* Scanner Framing Box */}
           <View style={styles.qrFrame}>
-            {/* QR Frame border */}
             <View style={styles.topLeft} />
             <View style={styles.topRight} />
             <View style={styles.bottomLeft} />
             <View style={styles.bottomRight} />
           </View>
-          {/* <View style={styles.mask} /> */}
-          <View style={styles.side} />
+
+          <View style={styles.sideMask} />
         </View>
-        <View style={[styles.mask, {height: (screenHeight - frameSize) / 2}]} />
 
-        <TouchableOpacity onPress={() => toggleFlashlight()}>
-          <Text style={styles.flashText}>
-            Double tap to open or close the flashlight
+        <View style={styles.bottomMask}>
+          {/* Flashlight Toggle Pill */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.flashButton, flashOn && styles.flashButtonActive]}
+            onPress={toggleFlashlight}>
+            <MaterialIcons
+              name={flashOn ? 'flash-on' : 'flash-off'}
+              size={20}
+              color={flashOn ? colors.primary : colors.white}
+            />
+            <Text
+              style={[
+                styles.flashText,
+                flashOn && {color: colors.primary, fontFamily: FontFamily.bold},
+              ]}>
+              {flashOn ? 'Torch On' : 'Torch Off'}
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.guideText}>
+            Align QR or Barcode within the frame to scan
           </Text>
-        </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.bottomContainer}>
+
+      {/* Bottom Control Card */}
+      <View style={styles.bottomCard}>
+        {/* Scanned Code Display Badge */}
         <TouchableOpacity
-          style={styles.assetButton}
-          onPress={() => {
-            setVisible(true);
-            // Show modal or input bottom sheet here
-          }}>
-          <Text style={styles.assetButtonText}>
-            {qrValue || 'ASSET NUMBER'}
+          activeOpacity={0.8}
+          style={styles.codeBadge}
+          onPress={() => setVisible(true)}>
+          <MaterialIcons name="qr-code-scanner" size={22} color={colors.primary} />
+          <Text style={styles.codeBadgeText} numberOfLines={1}>
+            {qrValue ? qrValue : 'Tap to enter asset code manually'}
           </Text>
+          <MaterialIcons name="edit" size={18} color={colors.grey} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.infoButton} onPress={goToAssetDetails}>
+        {/* Primary Action Button */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.infoButton}
+          onPress={goToAssetDetails}>
+          <MaterialIcons name="search" size={22} color={colors.white} />
           <Text style={styles.infoButtonText}>GET ASSET INFORMATION</Text>
         </TouchableOpacity>
       </View>
+
       {visible && (
         <AssetModal visible={visible} toggle={() => setVisible(false)} />
       )}
@@ -111,180 +138,156 @@ export const QRScannerScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0F172A',
   },
   scannerWrapper: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-
+  topMask: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
   middleRow: {
     flexDirection: 'row',
+    height: frameSize,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-
-  mask: {
+  sideMask: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
   },
-
-  topBottomMask: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    width: '100%',
-  },
-
-  flashText: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    color: colors.white,
-    fontSize: scaleFont(13),
-  },
-  bottomContainer: {
-    backgroundColor: colors.white,
-    flex: 0.3,
-  },
-  assetButton: {
-    backgroundColor: colors.red,
-    borderWidth: 3,
-    borderColor: '#959595',
-    height: 40,
-    justifyContent: 'center',
+  bottomMask: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    // marginHorizontal:20,
-    margin: 20,
+    paddingTop: 24,
   },
-  assetButtonText: {
-    color: colors.white,
-    fontSize: scaleFont(18),
-  },
-  infoButton: {
-    marginHorizontal: 20,
-    backgroundColor: '#33485E',
-    borderWidth: 3,
-    borderColor: '#959595',
-    borderRadius: 12,
-    height: 45,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  infoButtonText: {
-    color: '#fff',
-    fontSize: scaleFont(18),
-  },
-  image: {
-    width: 100,
-    height: 40,
-    resizeMode: 'contain',
-  },
-
   qrFrame: {
-    width: '100%',
-    maxWidth: screenWidth - 50,
-    height: 350,
+    width: frameSize,
+    height: frameSize,
     position: 'relative',
-    // marginHorizontal: 20,
-    borderRadius: 20, // ⬅️ Rounded corners
-    // overflow: 'hidden', // ⬅️ Ensures child views respect the border radius
-    // borderWidth: 2,
-    // borderColor: colors.primary,
+    borderRadius: 20,
   },
   topLeft: {
     position: 'absolute',
-    top: -5,
-    left: -5,
-    width: 40,
-    height: 40,
-    borderTopWidth: 5,
-    borderLeftWidth: 5,
-    borderTopLeftRadius: 15,
-    borderColor: colors.red,
+    top: 0,
+    left: 0,
+    width: 36,
+    height: 36,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 16,
+    borderColor: colors.secondary,
   },
   topRight: {
-    borderTopRightRadius: 15,
     position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 40,
-    height: 40,
-    borderTopWidth: 5,
-    borderRightWidth: 5,
-    borderColor: colors.primary,
-    zIndex: 1,
+    top: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 16,
+    borderColor: colors.secondary,
   },
   bottomLeft: {
-    borderBottomLeftRadius: 15,
     position: 'absolute',
-    bottom: -5,
-    left: -5,
-    width: 40,
-    height: 40,
-    borderBottomWidth: 5,
-    borderLeftWidth: 5,
-    borderColor: colors.primary,
-    zIndex: 1,
+    bottom: 0,
+    left: 0,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 16,
+    borderColor: colors.secondary,
   },
   bottomRight: {
     position: 'absolute',
-    bottom: -5,
-    right: -5,
-    width: 40,
-    height: 40,
-    borderBottomWidth: 5,
-    borderRightWidth: 5,
-    borderColor: colors.red,
-    borderBottomRightRadius: 15,
-    zIndex: 1,
-  },
-  centerLine: {
-    position: 'absolute',
-    width: 300,
-    height: 4,
-    backgroundColor: colors.primary,
-    top: '50%',
-    zIndex: 1,
-    borderRadius: 5,
-  },
-
-  cutout: {
-    width: 250,
-    height: 250,
-    borderWidth: 1,
-
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  overlayContainer: {
-    position: 'absolute',
-    top: '10%', // Adjust this to position the image
-    marginLeft: '45%',
-    transform: [{translateX: -50}], // Center the image horizontally
-    zIndex: 10,
-  },
-  overlayImage: {
-    width: 150, // Adjust the size of the overlay image
-    height: 150,
-    resizeMode: 'contain',
-    marginBottom: 20,
-  },
-  redSideLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
     bottom: 0,
-    width: 20,
-    backgroundColor: 'red',
-    opacity: 0.5, // Optional: make it slightly transparent
-    zIndex: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 16,
+    borderColor: colors.secondary,
   },
-  side: {
-    width: 30, // or however thick you want the red overlay
-    height: 350, // should match qrFrame height
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    // optional for transparency
+  flashButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    marginBottom: 12,
+  },
+  flashButtonActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  flashText: {
+    color: colors.white,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.medium,
+    marginLeft: 8,
+  },
+  guideText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.regular,
+    textAlign: 'center',
+  },
+  bottomCard: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: -4},
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+  },
+  codeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  codeBadgeText: {
+    flex: 1,
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginHorizontal: 10,
+  },
+  infoButton: {
+    backgroundColor: colors.primary,
+    height: 52,
+    borderRadius: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  infoButtonText: {
+    color: colors.white,
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
 });
 

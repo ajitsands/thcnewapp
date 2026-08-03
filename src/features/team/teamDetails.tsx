@@ -1,6 +1,6 @@
+import React, {useEffect} from 'react';
 import {
   FlatList,
-  ImageBackground,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -19,17 +19,16 @@ import {useToast} from 'react-native-toast-notifications';
 import moment from 'moment';
 import {
   getServiceDetails,
-  getServiceSlots,
-  getServiceTypes,
 } from '../../store/reducers/serviceReducers/serviceDetailsReducer';
-import {useEffect} from 'react';
-import getTeam, {getTeamDetails} from '../../store/reducers/getTeam';
+import {getTeamDetails} from '../../store/reducers/getTeam';
 import {scaleFont} from '../../utils/helper';
+
 interface TeamDetailProps {
   route: any;
 }
+
 export const TeamDetails = (props: TeamDetailProps) => {
-  const {data, loading, error} = useAppSelector(state => state.team);
+  const {data, loading} = useAppSelector(state => state.team);
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
   const {ticketType} = useAppSelector(state => state.tickets);
   const tickets = useAppSelector(state => state.tickets.data);
@@ -38,13 +37,12 @@ export const TeamDetails = (props: TeamDetailProps) => {
   const toast = useToast();
 
   const {route} = props;
-  const {visitDate} = route?.params;
-  console.log('vvvvvv', visitDate);
-  const teamDetails = data?.data;
+  const visitDate = route?.params?.visitDate;
+  const teamDetails = data?.data || [];
   const ticketDetails = tickets?.data[0];
 
   useEffect(() => {
-    if (status == 'success') {
+    if (status === 'success') {
       dispatch(
         getTeamDetails({
           action: 'get_team_of_visit',
@@ -56,13 +54,14 @@ export const TeamDetails = (props: TeamDetailProps) => {
       );
     }
   }, [status]);
+
   const isBackdated = (selectedDate: string) => {
     return moment(selectedDate).isBefore(moment(), 'day');
   };
 
-  const handleAttendanceMarking = item => {
-    if (item?.is_leader == 'Yes' && !isBackdated(visitDate)) {
-      item?.is_attend == 'No' &&
+  const handleAttendanceMarking = (item: any) => {
+    if (item?.is_leader === 'Yes' && !isBackdated(visitDate)) {
+      if (item?.is_attend === 'No') {
         dispatch(
           markPresent({
             action: 'mark_emp_attendance',
@@ -72,243 +71,258 @@ export const TeamDetails = (props: TeamDetailProps) => {
             emp_code: employeeCode,
           }),
         );
+      }
     } else {
-      toast.show(`You Don't have the privilege to mark attendance`, {
+      toast.show(`You don't have privilege to mark attendance`, {
         style: styles.toast,
-        textStyle: {
-          fontFamily: FontFamily.regular,
-          fontSize: scaleFont(16),
-          color: colors.white,
-          textAlign: 'center',
-        },
       });
     }
   };
-  const renderTeamDetails = ({item}: any) => {
+
+  const renderTeamCard = ({item}: any) => {
+    const isLeader = item?.is_leader === 'Yes';
+    const isPresent = item?.is_attend === 'Yes';
+
     return (
-      <View style={{margin: 10}}>
-        <View style={styles.header}>
-          <Text
-            style={
-              styles.headerText
-            }>{`Work Order No: ${item?.ticket_ref_no}`}</Text>
-        </View>
-        <View style={{backgroundColor: colors.primary}}>
-          {item?.is_leader == 'Yes' && (
-            <ImageBackground
-              style={styles.flag}
-              source={require('../../assets/images/3.0x/thoranam.png')}
-              tintColor={colors.blue}>
-              <Text style={styles.flagText}>L</Text>
-            </ImageBackground>
+      <View style={styles.memberCard}>
+        {/* Member Header */}
+        <View style={styles.memberHeader}>
+          <View style={styles.memberInfoRow}>
+            <View style={styles.avatarCircle}>
+              <MaterialIcons name="person" size={20} color={colors.white} />
+            </View>
+            <View>
+              <Text style={styles.memberName}>{item.employee_name}</Text>
+              <Text style={styles.memberCode}>ID: {item.employee_code}</Text>
+            </View>
+          </View>
+
+          {isLeader && (
+            <View style={styles.leaderBadge}>
+              <MaterialIcons name="stars" size={12} color={colors.white} />
+              <Text style={styles.leaderBadgeText}>TEAM LEADER</Text>
+            </View>
           )}
         </View>
 
-        <View style={styles.details}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 5,
-            }}>
-            <Text style={styles.detailText}>EMPLOYEE CODE</Text>
-            <Text style={[styles.detailText, {width: '20%'}]}>:</Text>
-            <Text style={styles.detailText}>{item.employee_code}</Text>
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 5,
-            }}>
-            <Text style={styles.detailText}>NAME</Text>
-            <Text style={[styles.detailText, {width: '20%'}]}>:</Text>
-            <Text style={styles.detailText}>{item.employee_name}</Text>
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 5,
-            }}>
-            <Text style={styles.detailText}>PHONE</Text>
-            <Text style={[styles.detailText, {width: '20%'}]}>:</Text>
-            <Text style={styles.detailText}>{item.employee_contact_no}</Text>
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 5,
-            }}>
-            <Text style={styles.detailText}>LEADER</Text>
-            <Text style={[styles.detailText, {width: '20%'}]}>:</Text>
-            <Text style={styles.detailText}>{item.is_leader}</Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.goButton,
-              {
-                backgroundColor:
-                  item?.is_attend == 'Yes' ? colors.grey : colors.red,
-              },
-            ]}
-            onPress={() => {
-              handleAttendanceMarking(item);
-            }}>
-            <Text style={styles.goButtonText}>Present</Text>
-          </TouchableOpacity>
+        <View style={styles.cardDivider} />
+
+        {/* Member Contact Info */}
+        <View style={styles.contactRow}>
+          <MaterialIcons name="phone" size={16} color={colors.primary} />
+          <Text style={styles.contactText}>
+            Phone: <Text style={styles.contactValue}>{item.employee_contact_no || 'N/A'}</Text>
+          </Text>
         </View>
+
+        {/* Attendance Action */}
+        <TouchableOpacity
+          activeOpacity={isPresent ? 1 : 0.8}
+          style={[
+            styles.attendanceBtn,
+            isPresent ? styles.presentBtn : styles.absentBtn,
+          ]}
+          onPress={() => handleAttendanceMarking(item)}>
+          <MaterialIcons
+            name={isPresent ? 'check-circle' : 'touch-app'}
+            size={18}
+            color={colors.white}
+          />
+          <Text style={styles.attendanceBtnText}>
+            {isPresent ? 'PRESENT' : 'MARK PRESENT'}
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
+
+  const isAnyonePresent =
+    Array.isArray(teamDetails) &&
+    teamDetails.some((item: any) => item.is_attend === 'Yes');
+
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <View style={styles.detailContainer}>
-        <LoadingOverlay visible={loading} />
+      <LoadingOverlay visible={loading} />
+
+      <View style={styles.mainWrapper}>
         <FlatList
           data={teamDetails}
-          renderItem={renderTeamDetails}
-          keyExtractor={(item, index) => item.ticket_team_ids}
+          renderItem={renderTeamCard}
+          keyExtractor={(item, index) => item.ticket_team_ids || index.toString()}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           ListHeaderComponent={() => (
-            <HeaderBar
-              title="TEAM MEMBER DETAILS"
-              isAssetDetails
-              Styles={styles.headerBarText}
-            />
+            <HeaderBar title="TEAM MEMBERS" isAssetDetails />
           )}
-          ListFooterComponent={() => {
-            const isAnyonePresent =
-              Array.isArray(teamDetails) &&
-              teamDetails.some(item => item.is_attend === 'Yes');
-
-            return (
-              <TouchableOpacity
-                disabled={!isAnyonePresent}
-                style={styles.serviceButton}
-                onPress={() => {
-                  dispatch(
-                    getServiceDetails({
-                      action: 'get_visit_services',
-                      amc_ticket: ticketType,
-                      amc_tkt_id: ticketDetails?.ticket_id,
-                      visit_date: visitDate,
-                      APIKEY: apiKey,
-                      emp_code: employeeCode,
-                    }),
-                  );
-                  navigate('ServiceDetails');
-                }}>
-                <MaterialIcons name="settings" color={colors.white} size={20} />
-                <Text style={styles.serviceButtonText}>
-                  {isAnyonePresent ? 'GET SERVICES' : 'ONE SHOULD BE PRESENT'}
-                </Text>
-              </TouchableOpacity>
-            );
-          }}
+          ListFooterComponent={() => (
+            <TouchableOpacity
+              disabled={!isAnyonePresent}
+              activeOpacity={0.85}
+              style={[
+                styles.serviceButton,
+                !isAnyonePresent && styles.disabledServiceBtn,
+              ]}
+              onPress={() => {
+                dispatch(
+                  getServiceDetails({
+                    action: 'get_visit_services',
+                    amc_ticket: ticketType,
+                    amc_tkt_id: ticketDetails?.ticket_id,
+                    visit_date: visitDate,
+                    APIKEY: apiKey,
+                    emp_code: employeeCode,
+                  }),
+                );
+                navigate('ServiceDetails');
+              }}>
+              <MaterialIcons name="settings" color={colors.white} size={22} />
+              <Text style={styles.serviceButtonText}>
+                {isAnyonePresent ? 'PROCEED TO SERVICES' : 'AT LEAST ONE MUST BE PRESENT'}
+              </Text>
+            </TouchableOpacity>
+          )}
         />
       </View>
     </View>
   );
 };
 
+export default TeamDetails;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#F4F7FA',
   },
-  detailContainer: {
-    marginTop: 40,
+  mainWrapper: {
     flex: 1,
-    // marginHorizontal:10,
   },
-  headerBarText: {
-    fontFamily: FontFamily.deupRegular,
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
-  header: {
-    backgroundColor: colors.red,
-    height: 40,
-    paddingHorizontal: 10,
-    borderTopLeftRadius: 10,
+  memberCard: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    elevation: 3,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  memberHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  memberInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  details: {
-    // paddingTop: 5,
-    padding: 15,
-    // paddingBottom: 5,
+  avatarCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
-  },
-  detailText: {
-    fontFamily: FontFamily.deupRegular,
-    color: colors.white,
-    fontSize: scaleFont(18),
-    width: '40%',
-  },
-  headerText: {
-    color: colors.white,
-    fontFamily: FontFamily.deupRegular,
-    fontSize: scaleFont(16),
-    marginLeft: 10,
-  },
-  flagText: {
-    color: colors.white,
-    fontSize: scaleFont(24),
-    fontFamily: FontFamily.bold,
-    top: 6,
-    left: 12,
-  },
-  flag: {
-    height: 60,
-    width: 35,
-    alignSelf: 'flex-end',
-    marginTop: -40,
-    marginRight: 10,
-    zIndex: 10,
-
-  },
-  goButton: {
-    // backgroundColor: colors.red,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 5,
-    width: '40%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
-    // Android shadow
+    marginRight: 12,
   },
-
-  goButtonText: {
-    color: colors.white,
+  memberName: {
+    fontSize: scaleFont(15),
     fontFamily: FontFamily.bold,
-    fontSize: scaleFont(14),
+    color: colors.header,
+  },
+  memberCode: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.medium,
+    color: colors.grey,
+    marginTop: 2,
+  },
+  leaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.secondary,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  leaderBadgeText: {
+    fontSize: scaleFont(9),
+    fontFamily: FontFamily.bold,
+    color: colors.primary,
+    marginLeft: 3,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  contactText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginLeft: 8,
+  },
+  contactValue: {
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  attendanceBtn: {
+    height: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  presentBtn: {
+    backgroundColor: '#15803D',
+  },
+  absentBtn: {
+    backgroundColor: colors.red,
+  },
+  attendanceBtnText: {
+    color: colors.white,
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    marginLeft: 6,
+    letterSpacing: 0.5,
   },
   serviceButton: {
     backgroundColor: colors.primary,
+    height: 52,
+    borderRadius: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 10,
-    marginTop: 15,
-    marginHorizontal: 10,
-    padding: 12,
-    marginBottom: 40,
+    marginTop: 10,
+    elevation: 3,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  disabledServiceBtn: {
+    backgroundColor: colors.grey,
+    opacity: 0.6,
+    elevation: 0,
   },
   serviceButtonText: {
     color: colors.white,
-    fontFamily: FontFamily.regular,
-    fontSize: scaleFont(20),
-    marginLeft: 5,
+    fontFamily: FontFamily.bold,
+    fontSize: scaleFont(13),
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
   toast: {
-    width: '60%',
-    // bottom: 50,
-    backgroundColor: colors.lightBackground,
-    // fontFamily: FontFamily.regular,
-    // fontSize: scaleFont(22),
+    bottom: 50,
   },
 });
