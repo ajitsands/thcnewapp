@@ -32,7 +32,7 @@ export const AssetServices = (props: serviceProps) => {
 
   const dispatch = useAppDispatch();
   const toast = useToast();
-  const {apiKey, employeeCode} = useAppSelector(state => state.app);
+  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
   const {
     assetServiceStatus,
     assetServiceError,
@@ -82,6 +82,37 @@ export const AssetServices = (props: serviceProps) => {
     return parsed.isValid() ? parsed.format('DD MMM YYYY') : dateStr;
   };
 
+  const getServiceDate = (service: any) => {
+    return (
+      service?.visit_date ||
+      service?.service_date ||
+      service?.created_date ||
+      service?.entry_date ||
+      service?.date ||
+      service?.created_at ||
+      service?.updated_at ||
+      service?.amc_visit_date ||
+      ''
+    );
+  };
+
+  const getTechnicianName = (service: any) => {
+    return (
+      service?.emp_name ||
+      service?.employee_name ||
+      service?.tech_name ||
+      service?.technician_name ||
+      service?.created_by ||
+      service?.user_name ||
+      service?.username ||
+      service?.emp_code ||
+      service?.employee_code ||
+      service?.added_by ||
+      empName ||
+      'N/A'
+    );
+  };
+
   return (
     <View style={styles.container}>
       {assetServiceLoading ? (
@@ -101,24 +132,17 @@ export const AssetServices = (props: serviceProps) => {
           {/* Services Checklist Header */}
           <View style={styles.sectionHeaderRow}>
             <MaterialIcons name="build" size={18} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Asset Service Records ({serviceDetails.length})</Text>
+            <Text style={styles.sectionTitle}>
+              Asset Service Records ({serviceDetails.length})
+            </Text>
           </View>
 
           {/* Service Items List */}
           <View style={styles.servicesList}>
             {serviceDetails.map((service: any, index: number) => {
               const isSelected = selectedServiceIndex === index;
-              const serviceDate =
-                service.visit_date ||
-                service.service_date ||
-                service.date ||
-                service.created_at;
-              const technicianName =
-                service.emp_name ||
-                service.employee_name ||
-                service.tech_name ||
-                service.user_name ||
-                service.created_by;
+              const serviceDate = getServiceDate(service);
+              const technicianName = getTechnicianName(service);
 
               return (
                 <TouchableOpacity
@@ -158,39 +182,35 @@ export const AssetServices = (props: serviceProps) => {
 
                       {/* Meta Tags: Date & Performed By */}
                       <View style={styles.metaRow}>
-                        {serviceDate ? (
-                          <View style={styles.metaBadge}>
-                            <MaterialIcons
-                              name="event"
-                              size={13}
-                              color={isSelected ? colors.white : colors.primary}
-                            />
-                            <Text
-                              style={[
-                                styles.metaText,
-                                isSelected && styles.selectedMetaText,
-                              ]}>
-                              {formatDate(serviceDate)}
-                            </Text>
-                          </View>
-                        ) : null}
+                        <View style={styles.metaBadge}>
+                          <MaterialIcons
+                            name="event"
+                            size={14}
+                            color={isSelected ? colors.white : colors.primary}
+                          />
+                          <Text
+                            style={[
+                              styles.metaText,
+                              isSelected && styles.selectedMetaText,
+                            ]}>
+                            {serviceDate ? formatDate(serviceDate) : 'N/A'}
+                          </Text>
+                        </View>
 
-                        {technicianName ? (
-                          <View style={styles.metaBadge}>
-                            <MaterialIcons
-                              name="person"
-                              size={13}
-                              color={isSelected ? colors.white : colors.primary}
-                            />
-                            <Text
-                              style={[
-                                styles.metaText,
-                                isSelected && styles.selectedMetaText,
-                              ]}>
-                              {technicianName}
-                            </Text>
-                          </View>
-                        ) : null}
+                        <View style={styles.metaBadge}>
+                          <MaterialIcons
+                            name="person"
+                            size={14}
+                            color={isSelected ? colors.white : colors.primary}
+                          />
+                          <Text
+                            style={[
+                              styles.metaText,
+                              isSelected && styles.selectedMetaText,
+                            ]}>
+                            {technicianName}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
@@ -218,23 +238,15 @@ export const AssetServices = (props: serviceProps) => {
                 <View style={styles.detailMetaItem}>
                   <Text style={styles.detailMetaLabel}>PERFORMED BY</Text>
                   <Text style={styles.detailMetaValue}>
-                    {selectedService?.emp_name ||
-                      selectedService?.employee_name ||
-                      selectedService?.tech_name ||
-                      selectedService?.user_name ||
-                      selectedService?.created_by ||
-                      'Technician'}
+                    {getTechnicianName(selectedService)}
                   </Text>
                 </View>
                 <View style={styles.detailMetaItem}>
                   <Text style={styles.detailMetaLabel}>SERVICE DATE</Text>
                   <Text style={styles.detailMetaValue}>
-                    {formatDate(
-                      selectedService?.visit_date ||
-                        selectedService?.service_date ||
-                        selectedService?.date ||
-                        selectedService?.created_at,
-                    )}
+                    {getServiceDate(selectedService)
+                      ? formatDate(getServiceDate(selectedService))
+                      : 'N/A'}
                   </Text>
                 </View>
               </View>
@@ -243,7 +255,10 @@ export const AssetServices = (props: serviceProps) => {
                 editable={false}
                 multiline
                 style={styles.remarksInput}
-                value={selectedService?.tech_remarks || 'No remarks recorded for this service.'}
+                value={
+                  selectedService?.tech_remarks ||
+                  'No remarks recorded for this service.'
+                }
               />
 
               <AudioPlayerUI
@@ -311,8 +326,8 @@ const styles = StyleSheet.create({
   serviceCard: {
     backgroundColor: colors.white,
     borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     elevation: 2,
@@ -336,7 +351,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
   },
   selectedIndexBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -353,7 +368,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   serviceTitleText: {
-    fontSize: scaleFont(13),
+    fontSize: scaleFont(14),
     fontFamily: FontFamily.bold,
     color: colors.header,
   },
@@ -369,7 +384,8 @@ const styles = StyleSheet.create({
   metaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
+    marginTop: 2,
   },
   metaText: {
     fontSize: scaleFont(11),
@@ -378,7 +394,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   selectedMetaText: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.95)',
   },
   remarksCard: {
     backgroundColor: colors.white,
