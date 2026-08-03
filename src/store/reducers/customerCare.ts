@@ -1,7 +1,6 @@
 import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
-import {navigate} from '../../navigators';
-import { getRequest, postRequest } from '../../network/services';
-import { ApiUrl } from '../../network/endpoints';
+import {getRequest} from '../../network/services';
+import {ApiUrl} from '../../network/endpoints';
 
 const initialState = {
   data: null,
@@ -9,6 +8,7 @@ const initialState = {
   error: '',
   loading: false,
 };
+
 interface contactParams {
   action: string;
   APIKEY: string;
@@ -20,25 +20,27 @@ export const getCustomerCareContact = createAsyncThunk(
   async (params: contactParams, {rejectWithValue}) => {
     try {
       console.log(params);
-      const response = await getRequest(ApiUrl.getScheduleURL,params);
-      if(response.data.status=='Failed'){
-        console.log(response?.data?.api_message)
-        throw new Error(response?.data?.api_message)
+      const response = await getRequest(ApiUrl.getScheduleURL, params);
+      if (response.data.status == 'Failed') {
+        console.log(response?.data?.api_message);
+        throw new Error(response?.data?.api_message);
       }
-       return response.data;
+      return response.data;
     } catch (error) {
-    
-     return rejectWithValue(error?.message || 'Something went wrong');
+      return rejectWithValue(error?.message || 'Something went wrong');
     }
   },
 );
 
 const getContact = createSlice({
-  name: 'customerCaret',
+  name: 'customerCare',
   initialState,
   reducers: {
     resetError: state => {
       state.error = initialState.error;
+    },
+    resetCustomerCareStatus: state => {
+      state.status = '';
     },
   },
   extraReducers: builder => {
@@ -49,9 +51,9 @@ const getContact = createSlice({
         state.error = '';
       })
       .addCase(getCustomerCareContact.fulfilled, (state, action) => {
-        console.log("action",action)
+        console.log('action', action);
         state.status = 'success';
-        state.data = action.payload
+        state.data = action.payload;
         state.error = '';
         state.loading = false;
       })
@@ -62,5 +64,6 @@ const getContact = createSlice({
       });
   },
 });
-export const {resetError} = getContact.actions;
+
+export const {resetError, resetCustomerCareStatus} = getContact.actions;
 export default getContact.reducer;

@@ -1,6 +1,5 @@
+import React, {useEffect} from 'react';
 import {
-  Alert,
-  FlatList,
   Image,
   Linking,
   ScrollView,
@@ -11,60 +10,48 @@ import {
 } from 'react-native';
 import colors from '../../themes/colors';
 import {Header} from '../../core/components/header';
-import {scaleFont, screenWidth} from '../../utils/helper';
 import {FontFamily} from '../../themes/fonts';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+import {homeData} from './data';
 import {navigate} from '../../navigators';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {getScheduleDates} from '../../store/reducers/getSchedules';
 import {getWorkHistory} from '../../store/reducers/workHistoryReducer';
 import {getProfileDetails} from '../../store/reducers/profileReducer';
-import {getCustomerCareContact} from '../../store/reducers/customerCare';
-import {useEffect} from 'react';
-import {useToast} from 'react-native-toast-notifications';
 import {getRequisitionHistory} from '../../store/reducers/requisitionReducers/requistionHistory';
+import {
+  getCustomerCareContact,
+  resetCustomerCareStatus,
+} from '../../store/reducers/customerCare';
+import {useToast} from 'react-native-toast-notifications';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import LoadingOverlay from '../../core/components/loadingOverlay';
+import {scaleFont} from '../../utils/helper';
 
-export const HomeScreen = () => {
-  const items = [
-    {
-      icon: require('../../assets/images/bar_code.png'),
-      title: 'SCAN',
-      route: 'Scanner',
-    },
-    {
-      icon: require('../../assets/images/schedule.png'),
-      title: 'SCHEDULE',
-      route: 'ScheduleCalendar',
-    },
-    {
-      icon: require('../../assets/images/history.png'),
-      title: 'HISTORY',
-      route: 'History',
-    },
-    {
-      icon: require('../../assets/images/requisition.png'),
-      title: 'REQUISITION',
-      route: 'RequisitionHistory',
-    },
-    {
-      icon: require('../../assets/images/profile.png'),
-      title: 'PROFILE',
-      route: 'ProfileScreen',
-    },
-    {
-      icon: require('../../assets/images/customer_care.png'),
-      title: 'CUSTOMER CARE',
-      route: '',
-    },
-  ];
+const HomeScreen = () => {
   const dispatch = useAppDispatch();
   const toast = useToast();
-  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
-  const profileData = useAppSelector(state => state.profile?.data?.data?.[0]);
-  const userName = empName || profileData?.emp_name || profileData?.employee_name || '';
-
-  const {data, status, error, loading} = useAppSelector(
+  const {data, loading, status, error} = useAppSelector(
     state => state.customerCare,
   );
+  const {
+    getScheduleLoading,
+    workHistoryLoading,
+    reqHistoryLoading,
+    profileLoading,
+  } = useAppSelector(state => ({
+    getScheduleLoading: state.schedules.getScheduleLoading,
+    workHistoryLoading: state.history.workHistoryLoading,
+    reqHistoryLoading: state.requisitionHistory.reqHistoryLoading,
+    profileLoading: state.profile.profileLoading,
+  }));
+
+  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
+  const profileDetails = useAppSelector(state => state.profile.profileDetails);
+
+  // Fetch logged-in user profile if name not cached yet
+  const userName =
+    empName || profileDetails?.data?.employee_name || profileDetails?.employee_name;
 
   useEffect(() => {
     if (!userName && apiKey && employeeCode) {
@@ -81,18 +68,24 @@ export const HomeScreen = () => {
   const handleCallPress = async () => {
     try {
       const phoneNumber = data?.data[0]?.thc_cust_care_no;
-      const url = `tel:${phoneNumber}`;
-      Linking.openURL(url);
-    } catch (error) {
+      if (phoneNumber) {
+        const url = `tel:${phoneNumber}`;
+        Linking.openURL(url);
+      }
+    } catch (err) {
       console.log('Error launching phone dialer');
     }
   };
 
   useEffect(() => {
-    if (status == 'success') {
+    if (status === 'success') {
       handleCallPress();
-    } else if (status == 'failed') {
-      toast.show(error);
+      dispatch(resetCustomerCareStatus());
+    } else if (status === 'failed') {
+      if (error) {
+        toast.show(error);
+      }
+      dispatch(resetCustomerCareStatus());
     }
   }, [status]);
 
@@ -150,40 +143,48 @@ export const HomeScreen = () => {
           }),
         );
         break;
-
       default:
-        null;
+        break;
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <Header isHome />
+  const isGlobalLoading =
+    loading ||
+    getScheduleLoading ||
+    workHistoryLoading ||
+    reqHistoryLoading ||
+    profileLoading;
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Welcome Banner / Hero Section */}
-        <View style={styles.heroCard}>
-          <View>
-            <Text style={styles.heroGreeting}>
-              Welcome Back{userName ? `, ${userName}` : ''} 👋
+  return (
+    <SafeAreaView style={styles.container}>
+      <Header isHome />
+      <LoadingOverlay visible={isGlobalLoading} />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        {/* Welcome Greeting Banner */}
+        <View style={styles.bannerContainer}>
+          <View style={styles.bannerTextCol}>
+            <Text style={styles.greetingTitle}>
+              Welcome back, {userName || 'Technician'}! 👋
             </Text>
-            <Text style={styles.heroSubtext}>THC Facility Management Dashboard</Text>
+            <Text style={styles.greetingSubtitle}>
+              Manage your facility maintenance services & jobs seamlessly
+            </Text>
           </View>
         </View>
 
-        {/* Section Header */}
-        <Text style={styles.sectionTitle}>Quick Services</Text>
-
-        {/* Grid Cards */}
+        {/* Dashboard Services Grid */}
         <View style={styles.gridContainer}>
-          {items.map((item, index) => {
-            const isCustomerCare = item.title === 'CUSTOMER CARE';
+          {homeData.map((item, index) => {
+            const isCustomerCare = item.route === '';
             return (
               <TouchableOpacity
                 key={index}
                 activeOpacity={0.8}
                 style={[
-                  styles.serviceCard,
+                  styles.card,
                   isCustomerCare && styles.customerCareCard,
                 ]}
                 onPress={() => handleItemPress(item)}>
@@ -192,11 +193,11 @@ export const HomeScreen = () => {
                     styles.iconCircle,
                     isCustomerCare && styles.customerCareIconCircle,
                   ]}>
-                  <Image
-                    source={item.icon}
-                    tintColor={isCustomerCare ? colors.white : colors.primary}
-                    style={styles.cardIcon}
-                  />
+                  {isCustomerCare ? (
+                    <MaterialIcons name="headset-mic" size={28} color={colors.white} />
+                  ) : (
+                    <Image source={item.icon} style={styles.cardIcon} />
+                  )}
                 </View>
                 <Text
                   style={[
@@ -210,9 +211,11 @@ export const HomeScreen = () => {
           })}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
+
+export default HomeScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -220,100 +223,91 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F7FA',
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
-  heroCard: {
+  bannerContainer: {
     backgroundColor: colors.primary,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
-    elevation: 4,
+    marginTop: 12,
+    marginBottom: 16,
+    elevation: 3,
     shadowColor: '#0B2C51',
-    shadowOffset: {width: 0, height: 4},
+    shadowOffset: {width: 0, height: 3},
     shadowOpacity: 0.15,
-    shadowRadius: 10,
+    shadowRadius: 6,
   },
-  heroGreeting: {
-    fontSize: scaleFont(20),
+  bannerTextCol: {
+    flex: 1,
+  },
+  greetingTitle: {
+    fontSize: scaleFont(18),
     fontFamily: FontFamily.bold,
     color: colors.white,
     marginBottom: 4,
   },
-  heroSubtext: {
+  greetingSubtitle: {
     fontSize: scaleFont(12),
     fontFamily: FontFamily.regular,
-    color: colors.secondary,
-    letterSpacing: 0.5,
-  },
-  sectionTitle: {
-    fontSize: scaleFont(16),
-    fontFamily: FontFamily.bold,
-    color: colors.header,
-    marginBottom: 12,
-    marginLeft: 4,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 18,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  serviceCard: {
+  card: {
+    width: '48%',
     backgroundColor: colors.white,
-    width: (screenWidth - 44) / 2,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
+    marginBottom: 14,
+    elevation: 2,
+    shadowColor: '#0B2C51',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
   },
   customerCareCard: {
-    width: screenWidth - 32,
-    backgroundColor: colors.red,
+    width: '100%',
+    backgroundColor: colors.header,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    paddingVertical: 18,
     paddingHorizontal: 20,
-    height: 70,
+    marginTop: 4,
   },
   iconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 10,
   },
   customerCareIconCircle: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginBottom: 0,
-    marginRight: 14,
+    marginRight: 16,
   },
   cardIcon: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     resizeMode: 'contain',
   },
   cardTitle: {
-    fontSize: scaleFont(12),
+    fontSize: scaleFont(13),
     fontFamily: FontFamily.bold,
     color: colors.header,
     textAlign: 'center',
   },
   customerCareTitle: {
+    fontSize: scaleFont(15),
     color: colors.white,
-    fontSize: scaleFont(14),
-  },
-  itemContainer: {
-    backgroundColor: colors.primary,
-  },
-  title: {
-    fontFamily: FontFamily.medium,
+    textAlign: 'left',
   },
 });
