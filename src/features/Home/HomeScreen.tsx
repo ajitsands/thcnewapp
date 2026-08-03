@@ -58,21 +58,33 @@ export const HomeScreen = () => {
   ];
   const dispatch = useAppDispatch();
   const toast = useToast();
-  const {apiKey, employeeCode} = useAppSelector(state => state.app);
+  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
+  const profileData = useAppSelector(state => state.profile?.data?.data?.[0]);
+  const userName = empName || profileData?.emp_name || profileData?.employee_name || '';
+
   const {data, status, error, loading} = useAppSelector(
     state => state.customerCare,
   );
+
+  useEffect(() => {
+    if (!userName && apiKey && employeeCode) {
+      dispatch(
+        getProfileDetails({
+          action: 'view_profile_details',
+          emp_code: employeeCode,
+          APIKEY: apiKey,
+        }),
+      );
+    }
+  }, [userName, apiKey, employeeCode]);
+
   const handleCallPress = async () => {
     try {
       const phoneNumber = data?.data[0]?.thc_cust_care_no;
       const url = `tel:${phoneNumber}`;
-      // const supported = await Linking.canOpenURL(url);
-      // console.log(supported);
-      // if (!supported) {
       Linking.openURL(url);
-      // }
     } catch (error) {
-      console.log('hjjj');
+      console.log('Error launching phone dialer');
     }
   };
 
@@ -83,6 +95,7 @@ export const HomeScreen = () => {
       toast.show(error);
     }
   }, [status]);
+
   const handleItemPress = async (item: any) => {
     switch (item.route) {
       case 'Scanner':
@@ -136,27 +149,11 @@ export const HomeScreen = () => {
             APIKEY: apiKey,
           }),
         );
-        // handleCallPress();
         break;
 
       default:
         null;
     }
-  };
-  const renderListItem = ({item}: any) => {
-    console.log(item);
-    return (
-      <TouchableOpacity
-        style={styles.itemContainer}
-        onPress={() => handleItemPress(item)}>
-        <Image
-          source={item.icon}
-          tintColor={colors.white}
-          style={{height: 60, resizeMode: 'contain'}}
-        />
-        <Text style={styles.title}>{item.title}</Text>
-      </TouchableOpacity>
-    );
   };
 
   return (
@@ -167,7 +164,10 @@ export const HomeScreen = () => {
         {/* Welcome Banner / Hero Section */}
         <View style={styles.heroCard}>
           <View>
-            <Text style={styles.heroGreeting}>Welcome Back 👋</Text>            <Text style={styles.heroSubtext}>THC Facility Management Dashboard</Text>
+            <Text style={styles.heroGreeting}>
+              Welcome Back{userName ? `, ${userName}` : ''} 👋
+            </Text>
+            <Text style={styles.heroSubtext}>THC Facility Management Dashboard</Text>
           </View>
         </View>
 
@@ -183,23 +183,27 @@ export const HomeScreen = () => {
                 key={index}
                 activeOpacity={0.8}
                 style={[
-                  styles.itemCard,
-                  isCustomerCare && styles.fullWidthCard,
+                  styles.serviceCard,
+                  isCustomerCare && styles.customerCareCard,
                 ]}
                 onPress={() => handleItemPress(item)}>
                 <View
                   style={[
-                    styles.iconBadge,
-                    isCustomerCare && styles.customerCareBadge,
+                    styles.iconCircle,
+                    isCustomerCare && styles.customerCareIconCircle,
                   ]}>
                   <Image
                     source={item.icon}
+                    tintColor={isCustomerCare ? colors.white : colors.primary}
                     style={styles.cardIcon}
                   />
                 </View>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardSubtitle}>
-                  {isCustomerCare ? 'Get Immediate Support' : 'Tap to access'}
+                <Text
+                  style={[
+                    styles.cardTitle,
+                    isCustomerCare && styles.customerCareTitle,
+                  ]}>
+                  {item.title}
                 </Text>
               </TouchableOpacity>
             );
@@ -221,25 +225,26 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     backgroundColor: colors.primary,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 20,
     marginBottom: 20,
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#0B2C51',
     shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowRadius: 10,
   },
   heroGreeting: {
-    fontSize: scaleFont(22),
+    fontSize: scaleFont(20),
     fontFamily: FontFamily.bold,
     color: colors.white,
     marginBottom: 4,
   },
   heroSubtext: {
-    fontSize: scaleFont(13),
+    fontSize: scaleFont(12),
     fontFamily: FontFamily.regular,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.secondary,
+    letterSpacing: 0.5,
   },
   sectionTitle: {
     fontSize: scaleFont(16),
@@ -253,58 +258,62 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  itemCard: {
+  serviceCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
-    width: screenWidth / 2 - 24,
-    padding: 18,
-    marginBottom: 16,
+    width: (screenWidth - 44) / 2,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     elevation: 3,
-    shadowColor: '#0B2C51',
+    shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 6,
   },
-  fullWidthCard: {
-    width: '100%',
+  customerCareCard: {
+    width: screenWidth - 32,
+    backgroundColor: colors.red,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingVertical: 14,
     paddingHorizontal: 20,
+    height: 70,
   },
-  iconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(11, 44, 81, 0.06)',
-    justifyContent: 'center',
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    marginBottom: 10,
   },
-  customerCareBadge: {
+  customerCareIconCircle: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     marginBottom: 0,
-    marginRight: 16,
-    backgroundColor: 'rgba(222, 110, 0, 0.1)',
+    marginRight: 14,
   },
   cardIcon: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     resizeMode: 'contain',
-    tintColor: colors.primary,
   },
   cardTitle: {
-    fontSize: scaleFont(13),
+    fontSize: scaleFont(12),
     fontFamily: FontFamily.bold,
     color: colors.header,
     textAlign: 'center',
   },
-  cardSubtitle: {
-    fontSize: scaleFont(10),
-    fontFamily: FontFamily.regular,
-    color: colors.grey,
-    marginTop: 2,
-    textAlign: 'center',
+  customerCareTitle: {
+    color: colors.white,
+    fontSize: scaleFont(14),
+  },
+  itemContainer: {
+    backgroundColor: colors.primary,
+  },
+  title: {
+    fontFamily: FontFamily.medium,
   },
 });
