@@ -1,4 +1,15 @@
-export const whiteListRedux = ['app'];
+export const whiteListRedux = [
+  'app',
+  'schedules',
+  'slots',
+  'tickets',
+  'team',
+  'history',
+  'profile',
+  'assetDetails',
+  'requisitionHistory',
+  'customerCare',
+];
 
 export const ignorePathRedux = [
   'payload.headers',

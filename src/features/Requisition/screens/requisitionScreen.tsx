@@ -1,8 +1,16 @@
-import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import colors from '../../../themes/colors';
 import {FontFamily} from '../../../themes/fonts';
 import {Header} from '../../../core/components/header';
-import {useEffect, useState} from 'react';
+import {HeaderBar} from '../../../core/components/headerBar';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {
   getCategoryDetails,
@@ -12,12 +20,10 @@ import {
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {BottomModal} from '../components/BottomModal';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
-import {TextInput} from 'react-native-gesture-handler';
 import {useToast} from 'react-native-toast-notifications';
 
 import {
   addItemDetails,
-  resetAddItemStatus,
   resetAddItemError,
   resetRequisitionSerialNos,
 } from '../../../store/reducers/requisitionReducers/addRequisitionItemReducer';
@@ -45,33 +51,29 @@ export const RequisitionView = () => {
   const [showCategoryModal, setCategoryShowModal] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [quantity, setQuantity] = useState({});
+  const [quantity, setQuantity] = useState<Record<string, string>>({});
   const [errorText, setErrorText] = useState('');
 
-  const {reqisitionData, status, error, loading, selectedCategory} =
+  const {reqisitionData, loading, selectedCategory} =
     useAppSelector(state => state.requisitionCategories);
   const {
-    productTypeError,
     productTypeLoading,
     productTypes,
     productTypesStatus,
     selectedProduct,
   } = useAppSelector(state => state.productType);
-  const {itemDetails, itemError, itemStatus, itemLoading} = useAppSelector(
+  const {itemDetails, itemStatus, itemLoading} = useAppSelector(
     state => state.itemDetails,
   );
   const {
-    additemDetails,
     additemError,
     additemStatus,
-    additemLoading,
     requisitionSerialNos,
   } = useAppSelector(state => state.addRequisitionItemDetails);
   const {deleteitemStatus} = useAppSelector(state => state.deleteRequisition);
   const {ticketType, data} = useAppSelector(state => state.tickets);
   const ticketDetails = data?.data[0];
-  console.log(selectedCategory, selectedProduct);
-  // console.log('mmmmmmmmmmmmmmmmm', requisitionSerialNos);
+
   const toast = useToast();
 
   useEffect(() => {
@@ -86,21 +88,22 @@ export const RequisitionView = () => {
   }, []);
 
   useEffect(() => {
-    if (additemStatus == 'success' || deleteitemStatus == 'success') {
-      setErrorText('UPDATED SUCCESSFULLY');
+    if (additemStatus === 'success' || deleteitemStatus === 'success') {
+      setErrorText('REQUISITION UPDATED SUCCESSFULLY');
       setShowErrorModal(true);
-    } else if (additemStatus == 'failed' || deleteitemStatus == 'failed') {
-      setErrorText(additemError);
+    } else if (additemStatus === 'failed' || deleteitemStatus === 'failed') {
+      setErrorText(additemError || 'Failed to update requisition');
       setShowErrorModal(true);
     }
   }, [additemStatus, deleteitemStatus]);
 
-  const handleQuantityChange = (text, productItemId) => {
+  const handleQuantityChange = (text: string, productItemId: string) => {
     setQuantity(prev => ({
       ...prev,
       [productItemId]: text,
     }));
   };
+
   const resetActions = () => {
     dispatch(resetProductStatus());
     dispatch(resetItemStatus());
@@ -112,11 +115,10 @@ export const RequisitionView = () => {
     dispatch(resetCategoryError());
   };
 
-  const handleDeleteRequisition = requisitionItem => {
+  const handleDeleteRequisition = (requisitionItem: any) => {
     const itemToDelete = requisitionSerialNos?.find(
-      item => item.productItemId === requisitionItem.product_item_id,
+      (item: any) => item.productItemId === requisitionItem.product_item_id,
     );
-    console.log('deleteeeeeeeee', itemToDelete);
     dispatch(
       deleteItemDetails({
         action: 'delete_item_request',
@@ -128,10 +130,10 @@ export const RequisitionView = () => {
     );
   };
 
-  const handleAddRequisitionItem = requisitionItem => {
+  const handleAddRequisitionItem = (requisitionItem: any) => {
     if (!quantity[requisitionItem.product_item_id]) {
-      toast.show('Please enter the quantity', {
-        textStyle: {fontSize: scaleFont(16)},
+      toast.show('Please enter the required quantity', {
+        style: styles.toast,
       });
     } else {
       dispatch(
@@ -156,7 +158,7 @@ export const RequisitionView = () => {
           location_name: ticketDetails?.location_name,
           location_id: ticketDetails?.location_id,
           requisition_serial_no:
-            requisitionSerialNos?.length == 0
+            requisitionSerialNos?.length === 0
               ? ''
               : requisitionSerialNos[0].requisition_serial_no,
         }),
@@ -166,110 +168,106 @@ export const RequisitionView = () => {
 
   return (
     <View style={styles.container}>
-      <LoadingOverlay visible={loading} />
-      <Header />
-      <View style={styles.historyList}>
-        <View style={styles.header}>
-          <MaterialIcons name="menu-open" color={colors.white} size={25} />
-          <Text style={styles.headerText}>MATERIAL REQUISITION</Text>
-        </View>
-        <View
-          style={{
-            backgroundColor: colors.primary,
-            borderBottomRightRadius: 20,
-            // flex:1
-          }}>
-          <Text style={styles.title}>PRODUCT CATEGORY TYPE</Text>
+      <Header isHome={false} />
+      <LoadingOverlay visible={loading || productTypeLoading || itemLoading} />
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <HeaderBar title="MATERIAL REQUISITION" />
+
+        {/* Category Picker Card */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.label}>PRODUCT CATEGORY</Text>
           <TouchableOpacity
-            style={styles.button}
+            activeOpacity={0.8}
+            style={styles.dropdownBtn}
             onPress={() => setCategoryShowModal(true)}>
-            <Text style={styles.itemLabel}>
+            <MaterialIcons name="category" size={20} color={colors.primary} style={{marginRight: 8}} />
+            <Text style={styles.dropdownText} numberOfLines={1}>
               {selectedCategory
                 ? selectedCategory?.product_category_name
-                : 'Select a Category'}
+                : 'Select Product Category'}
             </Text>
-            <MaterialIcons
-              name="arrow-drop-down"
-              color={colors.primary}
-              size={25}
-            />
+            <MaterialIcons name="arrow-drop-down" color={colors.header} size={24} />
           </TouchableOpacity>
-          <LoadingOverlay visible={productTypeLoading} />
-          {productTypesStatus == 'success' && (
-            <View style={{marginVertical: 8}}>
-              <Text style={styles.title}>PRODUCT TYPE</Text>
-              <TouchableOpacity
-                style={styles.button}
-                onPress={() => setShowProductModal(true)}>
-                <Text style={styles.itemLabel}>
-                  {selectedProduct
-                    ? selectedProduct?.product_type_name
-                    : 'Select a Product Type'}
-                </Text>
-                <MaterialIcons
-                  name="arrow-drop-down"
-                  color={colors.primary}
-                  size={25}
-                />
-              </TouchableOpacity>
-            </View>
-          )}
-          <LoadingOverlay visible={itemLoading} />
-          {itemStatus == 'success' &&
-            itemDetails?.data?.map((item, key) => {
-              const isCompleted = requisitionSerialNos.some(
-                requisition =>
+        </View>
+
+        {/* Product Type Picker Card */}
+        {productTypesStatus === 'success' && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.label}>PRODUCT TYPE</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.dropdownBtn}
+              onPress={() => setShowProductModal(true)}>
+              <MaterialIcons name="inventory" size={20} color={colors.primary} style={{marginRight: 8}} />
+              <Text style={styles.dropdownText} numberOfLines={1}>
+                {selectedProduct
+                  ? selectedProduct?.product_type_name
+                  : 'Select Product Type'}
+              </Text>
+              <MaterialIcons name="arrow-drop-down" color={colors.header} size={24} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Available Items List Section */}
+        {itemStatus === 'success' && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Select Material Items</Text>
+            <Text style={styles.sectionSubtitle}>
+              Specify required quantity and tap add to include in requisition
+            </Text>
+
+            {itemDetails?.data?.map((item: any, key: number) => {
+              const isAdded = requisitionSerialNos.some(
+                (requisition: any) =>
                   requisition?.productItemId === item.product_item_id,
               );
 
               return (
-                <View style={{marginVertical: 3}} key={key}>
+                <View style={styles.itemRowCard} key={key}>
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>
+                      {item?.product_item_name}
+                    </Text>
+                    <Text style={styles.itemId}>Code: #{item?.product_item_id}</Text>
+                  </View>
+
+                  <TextInput
+                    style={styles.qtyInput}
+                    value={quantity[item.product_item_id] || ''}
+                    placeholder="Qty"
+                    placeholderTextColor={colors.grey}
+                    keyboardType="numeric"
+                    onChangeText={text =>
+                      handleQuantityChange(text, item.product_item_id)
+                    }
+                  />
+
                   <TouchableOpacity
-                    style={styles.button}
-                    // onPress={() => setShowItemModal(true)}
-                  >
-                    <Text
-                      style={[
-                        styles.itemLabel,
-                        {
-                          fontFamily: FontFamily.deupRegular,
-                          fontSize: scaleFont(18),
-                        },
-                      ]}>{`${item?.product_item_id} - ${item?.product_item_name}`}</Text>
-                    <TextInput
-                      style={styles.inputContainer}
-                      value={quantity[item.product_item_id] || ''}
-                      placeholder="0"
-                      onChangeText={text =>
-                        handleQuantityChange(text, item.product_item_id)
-                      }
+                    activeOpacity={0.85}
+                    style={[
+                      styles.actionBtn,
+                      isAdded ? styles.deleteBtn : styles.addBtn,
+                    ]}
+                    onPress={() =>
+                      isAdded
+                        ? handleDeleteRequisition(item)
+                        : handleAddRequisitionItem(item)
+                    }>
+                    <MaterialIcons
+                      name={isAdded ? 'delete-outline' : 'add-shopping-cart'}
+                      color={colors.white}
+                      size={18}
                     />
-                    <TouchableOpacity
-                      style={[
-                        styles.playButton,
-                        {
-                          backgroundColor: isCompleted
-                            ? colors.blue
-                            : colors.green,
-                        },
-                      ]}
-                      onPress={() =>
-                        isCompleted
-                          ? handleDeleteRequisition(item)
-                          : handleAddRequisitionItem(item)
-                      }>
-                      <MaterialIcons
-                        name={isCompleted ? 'refresh' : 'play-circle-outline'}
-                        color={colors.white}
-                        size={25}
-                      />
-                    </TouchableOpacity>
                   </TouchableOpacity>
                 </View>
               );
             })}
-        </View>
-      </View>
+          </View>
+        )}
+      </ScrollView>
+
       {(showCategoryModal || showProductModal) && (
         <BottomModal
           visible={showCategoryModal || showProductModal}
@@ -281,14 +279,13 @@ export const RequisitionView = () => {
           content={showProductModal ? productTypes?.data : reqisitionData?.data}
         />
       )}
+
       {showErrorModal && (
         <ErrorModal
           visible={showErrorModal}
           toggle={() => {
             setShowErrorModal(false);
-            dispatch(resetAddItemStatus());
             dispatch(resetDeleteItemStatus());
-            dispatch(resetAddItemError());
             dispatch(resetDeleteItemError());
           }}
           errorText={errorText}
@@ -298,77 +295,113 @@ export const RequisitionView = () => {
   );
 };
 
+export default RequisitionView;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F4F7FA',
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  sectionCard: {
     backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  historyList: {
-    margin: 10,
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
-    marginBottom: 50,
+  label: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
-  header: {
-    backgroundColor: colors.red,
-    height: 50,
+  dropdownBtn: {
     flexDirection: 'row',
-    padding: 10,
     alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    height: 52,
   },
-  headerText: {
-    color: colors.white,
-    fontFamily: FontFamily.duepBold,
-    fontSize: scaleFont(18),
-    marginLeft: 10,
+  dropdownText: {
+    flex: 1,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
   },
-  title: {
-    color: colors.white,
-    fontSize: scaleFont(16),
-    fontFamily: FontFamily.variation,
-    // flex: 1,
-    textAlign: 'left',
-    margin: 10,
+  sectionTitle: {
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
   },
-  itemLabel: {
-    fontSize: scaleFont(16),
-    color: colors.black,
+  sectionSubtitle: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginBottom: 14,
+  },
+  itemRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemName: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  itemId: {
+    fontSize: scaleFont(10),
     fontFamily: FontFamily.medium,
-    flex: 1,
-    textAlign: 'left',
+    color: colors.grey,
+    marginTop: 2,
   },
-  button: {
+  qtyInput: {
+    width: 60,
+    height: 40,
     backgroundColor: colors.white,
-    height: 50,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.black,
-    marginHorizontal: 10,
-    paddingHorizontal: 5,
-  },
-  playButton: {
-    backgroundColor: colors.green,
-    borderTopLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    padding: 6,
-    width: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inputContainer: {
-    padding: 8,
-    width: 100,
-    borderWidth: 1,
-    borderColor: colors.black,
-    borderRadius: 5,
-    marginHorizontal: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
     textAlign: 'center',
-    fontSize: scaleFont(16),
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginHorizontal: 10,
+  },
+  actionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addBtn: {
+    backgroundColor: colors.primary,
+  },
+  deleteBtn: {
+    backgroundColor: colors.red,
+  },
+  toast: {
+    bottom: 50,
   },
 });

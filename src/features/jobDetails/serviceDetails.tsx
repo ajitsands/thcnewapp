@@ -22,9 +22,7 @@ import {
   getServiceSlots,
   getServiceStatusDetails,
   getServiceDetails,
-  getServiceTypes,
 } from '../../store/reducers/serviceReducers/serviceDetailsReducer';
-import {Loader} from '../../core/components/loader';
 import moment from 'moment';
 import {getServiceImages} from '../../store/reducers/serviceReducers/getserviceImages';
 import {PickerImage} from './components/imagePicker';
@@ -48,69 +46,57 @@ import {
 } from '../../store/reducers/serviceReducers/restartJobReducer';
 import {extendTicketAction} from '../../store/reducers/serviceReducers/extendTicketReducer';
 import {completeTicketAction} from '../../store/reducers/serviceReducers/completeTicketReducer';
-import {
-  resetError,
-  resetStatusMessage,
-} from '../../store/reducers/serviceReducers/uploadServiceImages';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
 import {useToast} from 'react-native-toast-notifications';
 import {useFocusEffect} from '@react-navigation/native';
 import {scaleFont} from '../../utils/helper';
-const audioRecorderPlayer = new AudioRecorderPlayer();
+
 export const ServiceDetails = () => {
   const {data} = useAppSelector(state => state.tickets) || {};
   const {activeSlots, visitDate} = useAppSelector(state => state.slots);
 
-  const {loading, status} = useAppSelector(state => state.service);
+  const {loading} = useAppSelector(state => state.service);
   const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
   const ticketDetails = data?.data[0];
   const {ticketType} = useAppSelector(state => state.tickets);
   const {
-    serviceStatus,
     serviceStatusData,
     serviceStatusLoading,
-    serviceStatusError,
-    serviceSlotsStatus,
     serviceSlotsData,
-    serviceSlotsLoading,
-    serviceSlotsError,
   } = useAppSelector(state => state.service);
   const serviceTypes = useAppSelector(state => state.service.data);
-  const {startJobStatus, startJobLoading, startJobError} = useAppSelector(
+  const {startJobStatus, startJobError} = useAppSelector(
     state => state.startJob,
   );
-  const {stopJobStatus, stopJobLoading, stopJobError} = useAppSelector(
+  const {stopJobStatus, stopJobError} = useAppSelector(
     state => state.stopJob,
   );
   const {restartJobStatus, restartJobError} = useAppSelector(
     state => state.restartJob,
   );
-  const {completeJobStatus, completeJobLoading, completeJobError} =
+  const {completeJobStatus, completeJobError} =
     useAppSelector(state => state.completeJob);
   const {serviceImages} = useAppSelector(state => state.serviceImages);
+  
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
-  const [jobStartItem, setJobStartItem] = useState(null);
-  const [jobStartIndex, setJobStartIndex] = useState(null);
+  const [jobStartItem, setJobStartItem] = useState<any>(null);
   const [completePressed, setCompletePressed] = useState(false);
-  const [initialValue, setInitialValue] = useState('');
   const [errorText, setErrorText] = useState('');
   const [description, setDescription] = useState('');
   const [audioPath, setAudioPath] = useState('');
   const [cleared, setCleared] = useState(false);
-  const [selectedService, setSelectedService] = useState();
+  const [selectedService, setSelectedService] = useState<number | null>(null);
 
   const slots = serviceSlotsData?.data?.[0];
-  const startSlot = parseInt(slots?.start_slot);
-  const slotCount = parseInt(slots?.additional_slots);
+  const startSlot = parseInt(slots?.start_slot || '1');
+  const slotCount = parseInt(slots?.additional_slots || '0');
   const isExtended = slots?.amc_visit_status === 'Extended';
   const isticketCompleted = slots?.amc_visit_status === 'Completed';
-  const canComplete = isticketCompleted && serviceImages?.data?.length > 0;
-  console.log('complete====================', isticketCompleted, canComplete);
+
   const allCompleted =
     serviceTypes?.data?.every(
-      item => item.ticket_service_status === serviceStatusTypes.completed,
+      (item: any) => item.ticket_service_status === serviceStatusTypes.completed,
     ) && serviceImages?.data?.length > 0;
 
   const slotNumbers = Array.from(
@@ -121,14 +107,15 @@ export const ServiceDetails = () => {
   const isBackdated = (selectedDate: string) => {
     return moment(selectedDate).isBefore(moment(), 'day');
   };
+
   const dispatch = useAppDispatch();
   const inputRef = useRef(null);
   const toast = useToast();
+
   useEffect(() => {
     if (serviceStatusData?.data?.[0]) {
       const remark = serviceStatusData?.data?.[0]?.tech_remarks || '';
       setDescription(remark);
-      setInitialValue(remark);
       setCleared(false);
       setAudioPath(serviceStatusData?.data?.[0]?.tech_audio);
     }
@@ -160,6 +147,7 @@ export const ServiceDetails = () => {
       }),
     );
   }, []);
+
   useEffect(() => {
     const jobStatusSuccess =
       startJobStatus === 'success' ||
@@ -227,6 +215,7 @@ export const ServiceDetails = () => {
       }),
     );
   };
+
   const handleJobAction = () => {
     dispatch(
       startJob({
@@ -237,10 +226,9 @@ export const ServiceDetails = () => {
         emp_code: employeeCode,
       }),
     );
-
     setShowConfirmModal(false);
-    // setShowErrorModal(true);
   };
+
   const handleJobPause = () => {
     dispatch(
       pauseJob({
@@ -252,10 +240,9 @@ export const ServiceDetails = () => {
       }),
     );
     setShowConfirmModal(false);
-
-    // setShowErrorModal(true);
   };
-  const handleJobComplete = item => {
+
+  const handleJobComplete = (item: any) => {
     dispatch(
       completeJob({
         action: 'service_complete',
@@ -267,8 +254,6 @@ export const ServiceDetails = () => {
         tech_remarks: description,
       }),
     );
-
-    // setShowErrorModal(true);
   };
 
   const handleJobRestart = () => {
@@ -281,7 +266,6 @@ export const ServiceDetails = () => {
         emp_code: employeeCode,
       }),
     );
-    // setShowErrorModal(true);
     setShowConfirmModal(false);
   };
 
@@ -300,12 +284,11 @@ export const ServiceDetails = () => {
     )
       .unwrap()
       .then(response => {
-        if (response.status == 'Failed') {
+        if (response.status === 'Failed') {
           setErrorText(response.api_message);
           setShowErrorModal(true);
         } else {
           setErrorText('JOB EXTENDED SUCCESSFULLY');
-          // ⬇️ Refresh slots to reflect completed status
           dispatch(
             getServiceSlots({
               action: 'get_slot_details_services',
@@ -321,6 +304,7 @@ export const ServiceDetails = () => {
       })
       .catch(error => setErrorText(error));
   };
+
   const handleCompleteTicket = () => {
     dispatch(
       completeTicketAction({
@@ -336,12 +320,11 @@ export const ServiceDetails = () => {
     )
       .unwrap()
       .then(response => {
-        if (response.status == 'Failed') {
+        if (response.status === 'Failed') {
           setErrorText(response.api_message);
           setShowErrorModal(true);
         } else {
           setErrorText('JOB COMPLETED SUCCESSFULLY');
-          // ⬇️ Refresh slots to reflect completed status
           dispatch(
             getServiceSlots({
               action: 'get_slot_details_services',
@@ -357,6 +340,7 @@ export const ServiceDetails = () => {
       })
       .catch(error => setErrorText(error));
   };
+
   const getIconName = (item: any) => {
     if (
       item?.ticket_service_status === serviceStatusTypes.completed &&
@@ -367,16 +351,17 @@ export const ServiceDetails = () => {
       return 'refresh';
 
     if (item?.ticket_service_status === serviceStatusTypes.start) {
-      return 'check-circle-outline';
+      return 'check-circle';
     }
     if (
       item?.ticket_service_status === serviceStatusTypes.pending &&
       !isBackdated(visitDate) &&
       !isExtended
     )
-      return 'play-circle-outline';
-    else return null;
+      return 'play-arrow';
+    else return 'info';
   };
+
   const getBackground = (item: any) => {
     if (
       item?.ticket_service_status === serviceStatusTypes.completed &&
@@ -384,19 +369,20 @@ export const ServiceDetails = () => {
       !isExtended &&
       !isBackdated(visitDate)
     )
-      return colors.blue;
+      return colors.primary;
 
     if (item?.ticket_service_status === serviceStatusTypes.start) {
-      return colors.green;
+      return '#15803D';
     }
     if (
       item?.ticket_service_status === serviceStatusTypes.pending &&
       !isBackdated(visitDate) &&
       !isExtended
     )
-      return colors.startBlue;
-    else return;
+      return colors.primary;
+    else return colors.grey;
   };
+
   const getSuccessMessage = () => {
     if (jobStartItem?.ticket_service_status === serviceStatusTypes.pending) {
       return 'JOB STARTED SUCCESSFULLY';
@@ -416,280 +402,246 @@ export const ServiceDetails = () => {
   };
 
   const handleChange = (text: string) => {
-    // If user starts typing for first time, clear the old text
     if (!cleared && text.length === 1) {
       setCleared(true);
-      setDescription(text); // keeps only the first typed letter
+      setDescription(text);
     } else {
       setDescription(text);
     }
   };
-  const handleAudioRecorded = path => {
-    console.log('Received audio path:', path);
+
+  const handleAudioRecorded = (path: string) => {
     setAudioPath(path);
   };
+
+  const isEmergency = ticketDetails?.ticket_priority !== 'Normal';
+
   return (
     <View style={styles.container}>
       <Header isHome={false} isService />
-      <ScrollView
-        style={{marginTop: 20}}
-        contentContainerStyle={{paddingBottom: 20}}>
-        <HeaderBar
-          title="SERVICE DETAILS/JOB CARD"
-          Styles={[styles.headerText, {fontSize: scaleFont(12)}]}
-          isAssetDetails
-        />
-        <View style={{marginHorizontal: 10}}>
-          <View style={styles.header}>
-            <Text
-              style={[
-                styles.headerText,
-                {marginLeft: 0},
-              ]}>{`Work Order No:${ticketDetails?.ticket_ref_code}`}</Text>
-            <ImageBackground
-              style={styles.flag}
-              source={require('../../assets/images/3.0x/thoranam.png')}
-              tintColor={
-                ticketDetails?.ticket_priority == 'Normal'
-                  ? colors.blue
-                  : colors.eRed
-              }>
-              <Text style={styles.flagText}>
-                {ticketDetails?.ticket_priority == 'Normal' ? 'N' : 'E'}
-              </Text>
-            </ImageBackground>
-            <TouchableOpacity onPress={() => setShowCustomerModal(true)}>
-              <MaterialIcons
-                name="info-outline"
-                size={30}
-                color={colors.white}
-              />
-            </TouchableOpacity>
-          </View>
-          <View
-            style={{
-              backgroundColor: colors.primary,
-              borderBottomRightRadius: 20,
-            }}>
-            <Text
-              style={
-                styles.assetCode
-              }>{`Asset Code:${ticketDetails?.asset_code}`}</Text>
-            {/* <LoadingOverlay visible={loading} /> */}
-            {serviceTypes?.data?.map((item: any, index: number) => {
-              // console.log('knkkmkm', item.ticket_service_status);
-              const isStarted =
-                item.ticket_service_status == serviceStatusTypes.start;
-              const isStopped =
-                item.ticket_service_status == serviceStatusTypes.stop;
-              const isPending =
-                item.ticket_service_status == serviceStatusTypes.pending;
-              const isCompleted =
-                item.ticket_service_status == serviceStatusTypes.completed;
-              const isCancelled =
-                item.ticket_service_status == serviceStatusTypes.cancelled;
+      <LoadingOverlay visible={loading} />
 
-              return (
-                <TouchableOpacity
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <HeaderBar title="SERVICE DETAILS & JOB CARD" />
+
+        {/* Work Order Header Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View>
+              <Text style={styles.woSubTitle}>WORK ORDER</Text>
+              <Text style={styles.woRefText}>#{ticketDetails?.ticket_ref_code || '---'}</Text>
+            </View>
+
+            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+              <View
+                style={[
+                  styles.priorityBadge,
+                  {backgroundColor: isEmergency ? '#FEE2E2' : '#DBEAFE'},
+                ]}>
+                <Text
                   style={[
-                    styles.button,
-                    {
-                      backgroundColor:
-                        selectedService == index ? colors.red : colors.white,
-                    },
-                  ]}
-                  key={index}
-                  onPress={() => handleServiceStatus(item, index)}>
-                  <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                    styles.priorityText,
+                    {color: isEmergency ? colors.red : colors.primary},
+                  ]}>
+                  {isEmergency ? 'EMERGENCY' : 'NORMAL'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.infoIconBtn}
+                onPress={() => setShowCustomerModal(true)}>
+                <MaterialIcons name="info" size={20} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.assetBadgeRow}>
+            <MaterialIcons name="qr-code" size={14} color={colors.secondary} />
+            <Text style={styles.assetBadgeText}>
+              ASSET CODE: {ticketDetails?.asset_code || 'N/A'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Service Tasks Checklist Section */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Checklist Services ({serviceTypes?.data?.length || 0})</Text>
+          <Text style={styles.sectionSubtitle}>
+            Select a service to start, pause, or update task details
+          </Text>
+
+          {serviceTypes?.data?.map((item: any, index: number) => {
+            const isSelected = selectedService === index;
+            const isStarted = item.ticket_service_status === serviceStatusTypes.start;
+            const isCompleted = item.ticket_service_status === serviceStatusTypes.completed;
+            const isCancelled = item.ticket_service_status === serviceStatusTypes.cancelled;
+
+            return (
+              <TouchableOpacity
+                key={index}
+                activeOpacity={0.85}
+                style={[
+                  styles.serviceItemCard,
+                  isSelected && styles.selectedServiceCard,
+                ]}
+                onPress={() => handleServiceStatus(item, index)}>
+                <View style={styles.serviceItemHeader}>
+                  <View style={styles.serviceTitleRow}>
                     <View
-                      style={{
-                        width: 15,
-                        height: 40,
-                        backgroundColor: isCancelled
-                          ? colors.red
-                          : isCompleted
-                          ? colors.green
-                          : isStarted && selectedService == index
-                          ? colors.blue
-                          : colors.transparent,
-                        marginRight: 5,
-                      }}
+                      style={[
+                        styles.statusDot,
+                        {
+                          backgroundColor: isCancelled
+                            ? colors.red
+                            : isCompleted
+                            ? '#15803D'
+                            : isStarted
+                            ? colors.primary
+                            : colors.grey,
+                        },
+                      ]}
                     />
                     <Text
                       style={[
-                        styles.serviceTypes,
-                        {
-                          color:
-                            selectedService == index
-                              ? colors.white
-                              : colors.black,
-                        },
-                      ]}>{`${index + 1} - ${item.service_description}`}</Text>
+                        styles.serviceTitleText,
+                        isSelected && styles.selectedServiceTitleText,
+                      ]}>
+                      {`${index + 1}. ${item.service_description}`}
+                    </Text>
                   </View>
 
-                  {selectedService == index && (
-                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                      {item.ticket_service_status == serviceStatusTypes.start &&
-                        !isBackdated(visitDate) &&
-                        !isExtended && (
-                          <TouchableOpacity
-                            style={[
-                              styles.playButton,
-                              {backgroundColor: colors.orange, marginRight: 5},
-                            ]}
-                            onPress={() => {
-                              // setCompletePressed(false)
-                              setShowConfirmModal(true);
-                              setJobStartItem(item);
-                              setJobStartIndex(index);
-                            }}>
-                            <MaterialIcons
-                              name="stop-circle"
-                              color={colors.white}
-                              size={25}
-                            />
-                          </TouchableOpacity>
-                        )}
+                  {isSelected && (
+                    <View style={styles.serviceActionRow}>
+                      {isStarted && !isBackdated(visitDate) && !isExtended && (
+                        <TouchableOpacity
+                          style={styles.stopActionBtn}
+                          onPress={() => {
+                            setShowConfirmModal(true);
+                            setJobStartItem(item);
+                          }}>
+                          <MaterialIcons name="pause" color={colors.white} size={18} />
+                        </TouchableOpacity>
+                      )}
 
                       <TouchableOpacity
                         style={[
-                          styles.playButton,
-                          {
-                            backgroundColor: getBackground(item),
-                          },
+                          styles.playActionBtn,
+                          {backgroundColor: getBackground(item)},
                         ]}
                         onPress={() => {
-                          if (
-                            item.ticket_service_status ==
-                            serviceStatusTypes.start
-                          ) {
+                          if (isStarted) {
                             setJobStartItem(item);
-                            setJobStartIndex(index);
                             setCompletePressed(true);
                             handleJobComplete(item);
                           } else {
                             setShowConfirmModal(true);
                             setJobStartItem(item);
-                            setJobStartIndex(index);
                           }
                         }}>
                         <MaterialIcons
                           name={getIconName(item)}
                           color={colors.white}
-                          size={25}
+                          size={18}
                         />
                       </TouchableOpacity>
                     </View>
                   )}
-                </TouchableOpacity>
-              );
-            })}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-            <View style={styles.dateContainer}>
-              <Text style={styles.detailText}>{`DATE : ${moment(
-                visitDate,
-              ).format('DD-MM-YYYY')}`}</Text>
-              <View style={{flexDirection: 'row', width: '100%'}}>
-                {slotNumbers.map((item, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.dateView,
-                      {
-                        borderColor: activeSlots == item ? colors.white : '',
-                        borderWidth: activeSlots == item ? 2 : 0,
-                        backgroundColor:
-                          activeSlots == item ? colors.primary : colors.red,
-                      },
-                    ]}>
-                    <Text
-                      style={[
-                        styles.detailText,
-                        {
-                          width: '100%',
-                          fontSize: scaleFont(22),
-                          textAlign: 'center',
-                        },
-                      ]}>
-                      {item}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-            <View style={styles.headerView}>
-              <Text style={[styles.headerText, {width: '30%'}]}>
-                DESCRIPTION
-              </Text>
-              <Text style={[styles.headerText, styles.typeContainer]}>
-                {`TYPE-${ticketDetails?.type_name}`}
-              </Text>
-            </View>
-            <View
-              style={{
-                backgroundColor: colors.white,
-                marginHorizontal: 10,
-                borderBottomRightRadius: 10,
-              }}>
-              <LoadingOverlay visible={serviceStatusLoading || loading} />
-              {/* {serviceStatusLoading && (
-                <Loader />
-               ) } */}
+        {/* Date & Time Slot Allocation Card */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Visit Date & Assigned Slots</Text>
+          <Text style={styles.dateLabel}>
+            DATE: <Text style={styles.dateValue}>{moment(visitDate).format('DD-MM-YYYY')}</Text>
+          </Text>
 
-              <TextInput
-                ref={inputRef}
-                style={{
-                  height: 100,
-                  fontFamily: FontFamily.deupRegular,
-                  marginLeft: 10,
-                  fontSize: scaleFont(20),
-                }}
-                value={description}
-                onChangeText={handleChange}
-                // onFocus={() => {
-                //   inputRef.current?.setNativeProps({
-                //     selection: {start: 0, end: 0},
-                //   });
-                // }}
-              />
-
-              <AudioPlayerUI
-                track={serviceStatusData?.data[0]?.tech_audio_file}
-                isLocal={serviceStatusData?.data[0] ? false : true}
-                isAssets={false}
-                onAudioRecorded={handleAudioRecorded}
-              />
-            </View>
-            <PickerImage
-              serviceImages={serviceImages}
-              ticketDetails={ticketDetails}
-            />
-
-            {!isBackdated(visitDate) && !isExtended && !isticketCompleted && (
-              <View style={styles.buttonContainer}>
-                <TouchableOpacity
-                  style={styles.completeButton}
-                  onPress={() => handleExtendTicket()}>
-                  <Text style={styles.completeText}>EXTEND</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  disabled={!allCompleted}
+          <View style={styles.slotsRow}>
+            {slotNumbers.map((item, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.slotBadge,
+                  activeSlots === item && styles.activeSlotBadge,
+                ]}>
+                <Text
                   style={[
-                    styles.completeButton,
-                    {
-                      backgroundColor: allCompleted
-                        ? colors.green
-                        : colors.grey,
-                    },
-                  ]}
-                  onPress={() => handleCompleteTicket()}>
-                  <Text style={styles.completeText}>COMPLETE</Text>
-                </TouchableOpacity>
+                    styles.slotBadgeText,
+                    activeSlots === item && styles.activeSlotBadgeText,
+                  ]}>
+                  {item}
+                </Text>
               </View>
-            )}
+            ))}
           </View>
         </View>
+
+        {/* Technician Remarks & Voice Note Card */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <MaterialIcons name="edit-note" size={20} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Technician Remarks & Audio</Text>
+          </View>
+
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>TYPE: {ticketDetails?.type_name || 'N/A'}</Text>
+          </View>
+
+          <TextInput
+            ref={inputRef}
+            placeholder="Type technician remarks here..."
+            placeholderTextColor={colors.grey}
+            style={styles.remarksInput}
+            multiline
+            numberOfLines={4}
+            value={description}
+            onChangeText={handleChange}
+          />
+
+          <AudioPlayerUI
+            track={serviceStatusData?.data[0]?.tech_audio_file}
+            isLocal={!serviceStatusData?.data[0]}
+            isAssets={false}
+            onAudioRecorded={handleAudioRecorded}
+          />
+        </View>
+
+        {/* Image Attachment Picker */}
+        <PickerImage
+          serviceImages={serviceImages}
+          ticketDetails={ticketDetails}
+        />
+
+        {/* Complete & Extend Ticket Actions */}
+        {!isBackdated(visitDate) && !isExtended && !isticketCompleted && (
+          <View style={styles.bottomButtonRow}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.extendBtn}
+              onPress={handleExtendTicket}>
+              <MaterialIcons name="update" size={18} color={colors.primary} />
+              <Text style={styles.extendBtnText}>EXTEND</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              disabled={!allCompleted}
+              activeOpacity={0.85}
+              style={[
+                styles.completeBtn,
+                !allCompleted && styles.disabledCompleteBtn,
+              ]}
+              onPress={handleCompleteTicket}>
+              <MaterialIcons name="check-circle" size={18} color={colors.white} />
+              <Text style={styles.completeBtnText}>COMPLETE JOB</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
+
       {showCustomerModal && (
         <CustomerModal
           visible={showCustomerModal}
@@ -703,11 +655,11 @@ export const ServiceDetails = () => {
           toggle={() => setShowConfirmModal(false)}
           errorText={
             jobStartItem?.ticket_service_status === serviceStatusTypes.start
-              ? 'Are you sure need to stop this service?'
+              ? 'Are you sure you need to pause this service?'
               : jobStartItem?.ticket_service_status ===
                 serviceStatusTypes.completed
-              ? 'Are you sure need to undo this service ?'
-              : 'Are you sure need to start this service?'
+              ? 'Are you sure you need to undo this completed service?'
+              : 'Are you sure you need to start this service?'
           }
           onConfirm={() => {
             if (
@@ -732,7 +684,6 @@ export const ServiceDetails = () => {
             setShowErrorModal(false);
             setCompletePressed(false);
             setErrorText('');
-            // dispatch(res)
           }}
           errorText={errorText !== '' ? errorText : getSuccessMessage()}
         />
@@ -741,131 +692,271 @@ export const ServiceDetails = () => {
   );
 };
 
+export default ServiceDetails;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: '#F4F7FA',
   },
-  header: {
-    backgroundColor: colors.red,
-    height: 40,
-    paddingHorizontal: 10,
-    borderTopLeftRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
   },
-  headerView: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  details: {
-    paddingTop: 0,
-    padding: 15,
+  heroCard: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
+    borderRadius: 20,
+    padding: 16,
+    marginVertical: 12,
+    elevation: 4,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
-  detailText: {
-    fontFamily: FontFamily.deupRegular,
-    color: colors.white,
-    fontSize: scaleFont(14),
-    width: '30%',
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  headerText: {
-    color: colors.white,
-    fontFamily: FontFamily.deupRegular,
-    fontSize: scaleFont(16),
-    marginLeft: 10,
-  },
-  flagText: {
-    color: colors.white,
-    fontSize: scaleFont(24),
+  woSubTitle: {
+    fontSize: scaleFont(10),
     fontFamily: FontFamily.bold,
-    top: 6,
-    left: 12,
+    color: colors.secondary,
+    letterSpacing: 0.5,
   },
-  flag: {
-    height: 60,
-    width: 35,
-    marginTop: 20, // Pushes it upward to "flow down" over the header
-    left: 50,
-    zIndex: 10,
-  },
-  assetCode: {
-    backgroundColor: colors.primary,
-    textAlign: 'center',
+  woRefText: {
+    fontSize: scaleFont(16),
+    fontFamily: FontFamily.bold,
     color: colors.white,
-    marginTop: 15,
+    marginTop: 2,
   },
-  button: {
-    paddingRight: 10,
+  priorityBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  priorityText: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.bold,
+  },
+  infoIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  assetBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  assetBadgeText: {
+    color: colors.white,
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.bold,
+    marginLeft: 6,
+  },
+  sectionCard: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  sectionSubtitle: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginBottom: 12,
+  },
+  serviceItemCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  selectedServiceCard: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  serviceItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    // backgroundColor: colors.white,
-    margin: 5,
-    marginHorizontal: 10,
   },
-  dateContainer: {
-    marginHorizontal: 10,
+  serviceTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    width: '100%',
+    flex: 1,
   },
-  dateView: {
-    height: 35,
-    width: 35,
-    borderRadius: 8,
-    justifyContent: 'center',
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  serviceTitleText: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    flex: 1,
+  },
+  selectedServiceTitleText: {
+    color: colors.white,
+  },
+  serviceActionRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 8,
   },
-  typeContainer: {
+  stopActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.red,
-    width: '60%',
-    paddingVertical: 8,
-    borderTopRightRadius: 10,
-    borderTopLeftRadius: 10,
-    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
   },
-  imagePicker: {
-    height: 40,
-    width: 40,
-    marginTop: 10,
+  playActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  serviceTypes: {
-    color: colors.black,
-    fontSize: scaleFont(16),
-    fontFamily: FontFamily.deupRegular,
+  dateLabel: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
+    marginBottom: 10,
   },
-  buttonContainer: {
+  dateValue: {
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  slotsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  slotBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  activeSlotBadge: {
+    backgroundColor: colors.primary,
+  },
+  slotBadgeText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  activeSlotBadgeText: {
+    color: colors.white,
+  },
+  typeBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+  },
+  typeBadgeText: {
+    fontSize: scaleFont(10),
+    fontFamily: FontFamily.bold,
+    color: colors.primary,
+  },
+  remarksInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.medium,
+    color: colors.header,
+    textAlignVertical: 'top',
+    height: 90,
+    marginBottom: 12,
+  },
+  bottomButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 6,
+  },
+  extendBtn: {
+    flex: 1,
+    backgroundColor: colors.white,
+    height: 50,
+    borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
-  completeButton: {
-    backgroundColor: colors.orange,
-    margin: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+  extendBtnText: {
+    color: colors.primary,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    marginLeft: 6,
   },
-  completeText: {
-    color: colors.white,
-    fontFamily: FontFamily.medium,
-    fontSize: scaleFont(18),
-  },
-  playButton: {
-    backgroundColor: '#00BCD4',
-    borderTopLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    padding: 3,
-    width: 45,
+  completeBtn: {
+    flex: 1.5,
+    backgroundColor: '#15803D',
+    height: 50,
+    borderRadius: 14,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#15803D',
+    shadowOffset: {width: 0, height: 3},
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  disabledCompleteBtn: {
+    backgroundColor: colors.grey,
+    opacity: 0.6,
+    elevation: 0,
+  },
+  completeBtnText: {
+    color: colors.white,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    marginLeft: 6,
+    letterSpacing: 0.5,
   },
 });

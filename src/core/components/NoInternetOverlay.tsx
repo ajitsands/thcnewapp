@@ -1,13 +1,12 @@
-// NoInternetOverlay.js
 import React, {useEffect, useState} from 'react';
-import {View, Text, StyleSheet, Dimensions} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import {screenWidth} from '../../utils/helper';
-import {useToast} from 'react-native-toast-notifications';
+import {screenWidth, scaleFont} from '../../utils/helper';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+import {FontFamily} from '../../themes/fonts';
 
 export const NoInternetOverlay = () => {
   const [isConnected, setIsConnected] = useState(true);
-  const toast = useToast();
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
@@ -18,17 +17,12 @@ export const NoInternetOverlay = () => {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!isConnected && toast) {
-      toast.show('No Internet Connection');
-    }
-  }, [isConnected]);
-
   if (isConnected) return null;
 
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>No Internet Connection</Text>
+      <MaterialIcons name="wifi-off" size={18} color="#F87171" style={styles.icon} />
+      <Text style={styles.text}>Offline Mode — Showing Cached Data</Text>
     </View>
   );
 };
@@ -38,13 +32,22 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     width: screenWidth,
-    paddingVertical: 10,
-    backgroundColor: '#ff4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#0F172A',
     zIndex: 9999,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: '#EF4444',
+  },
+  icon: {
+    marginRight: 8,
   },
   text: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#F8FAFC',
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
   },
 });
