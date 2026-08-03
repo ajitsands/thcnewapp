@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -20,6 +20,7 @@ import {useToast} from 'react-native-toast-notifications';
 import {scaleFont} from '../../../utils/helper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import moment from 'moment';
+import {useFocusEffect} from '@react-navigation/native';
 
 interface serviceProps {
   code: string;
@@ -42,24 +43,29 @@ export const AssetServices = (props: serviceProps) => {
 
   const serviceDetails = assetServices?.data || [];
 
-  useEffect(() => {
-    dispatch(
-      getAssetServiceDetails({
-        action: 'get_asset_service_details',
-        APIKEY: apiKey,
-        emp_code: employeeCode,
-        asset_code: code,
-      }),
-    );
-    dispatch(
-      getAssetServiceImages({
-        action: 'get_asset_service_images',
-        APIKEY: apiKey,
-        emp_code: employeeCode,
-        asset_code: code,
-      }),
-    );
-  }, []);
+  // Always fetch fresh asset service details whenever tab is focused or code changes
+  useFocusEffect(
+    useCallback(() => {
+      if (code) {
+        dispatch(
+          getAssetServiceDetails({
+            action: 'get_asset_service_details',
+            APIKEY: apiKey,
+            emp_code: employeeCode,
+            asset_code: code.trim(),
+          }),
+        );
+        dispatch(
+          getAssetServiceImages({
+            action: 'get_asset_service_images',
+            APIKEY: apiKey,
+            emp_code: employeeCode,
+            asset_code: code.trim(),
+          }),
+        );
+      }
+    }, [code, apiKey, employeeCode]),
+  );
 
   useEffect(() => {
     if (assetServiceStatus === 'failed' && assetServiceError) {
@@ -68,21 +74,35 @@ export const AssetServices = (props: serviceProps) => {
     }
   }, [assetServiceStatus]);
 
-  // Select first service by default if available
+  // Select first service by default whenever serviceDetails list changes
   useEffect(() => {
-    if (serviceDetails.length > 0 && selectedServiceIndex === null) {
+    if (serviceDetails.length > 0) {
       setSelectedServiceIndex(0);
       setSelectedService(serviceDetails[0]);
+    } else {
+      setSelectedServiceIndex(null);
+      setSelectedService(null);
     }
-  }, [serviceDetails]);
+  }, [assetServices]);
 
   const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
-    const parsed = moment(dateStr, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD', moment.ISO_8601]);
-    return parsed.isValid() ? parsed.format('DD MMM YYYY, hh:mm A') : dateStr;
+    if (!dateStr || dateStr === 'NA' || dateStr === 'null' || dateStr.includes('0000-00-00')) {
+      return 'N/A';
+    }
+    // Clean any newlines or extra spaces from server response string
+    const cleanStr = String(dateStr).replace(/[\r\n]+/g, ' ').trim();
+    const parsed = moment(cleanStr, [
+      'YYYY-MM-DD HH:mm:ss',
+      'YYYY-MM-DD HH:mm',
+      'YYYY-MM-DD',
+      'DD-MM-YYYY',
+      moment.ISO_8601,
+    ]);
+    return parsed.isValid() ? parsed.format('DD MMM YYYY, hh:mm A') : cleanStr;
   };
 
   const getServiceDate = (service: any) => {
+    if (!service) return '';
     return (
       service?.completed_date ||
       service?.visit_date ||
@@ -98,7 +118,8 @@ export const AssetServices = (props: serviceProps) => {
   };
 
   const getTechnicianName = (service: any) => {
-    return (
+    if (!service) return 'N/A';
+    const name =
       service?.emp_name ||
       service?.employee_name ||
       service?.tech_name ||
@@ -109,9 +130,8 @@ export const AssetServices = (props: serviceProps) => {
       service?.emp_code ||
       service?.employee_code ||
       service?.added_by ||
-      empName ||
-      'N/A'
-    );
+      empName;
+    return name && name !== 'NA' ? name : 'Technician';
   };
 
   return (
@@ -194,7 +214,7 @@ export const AssetServices = (props: serviceProps) => {
                               styles.metaText,
                               isSelected && styles.selectedMetaText,
                             ]}>
-                            {serviceDate ? formatDate(serviceDate) : 'N/A'}
+                            {formatDate(serviceDate)}
                           </Text>
                         </View>
 
@@ -245,9 +265,7 @@ export const AssetServices = (props: serviceProps) => {
                 <View style={styles.detailMetaItem}>
                   <Text style={styles.detailMetaLabel}>COMPLETED DATE & TIME</Text>
                   <Text style={styles.detailMetaValue}>
-                    {getServiceDate(selectedService)
-                      ? formatDate(getServiceDate(selectedService))
-                      : 'N/A'}
+                    {formatDate(getServiceDate(selectedService))}
                   </Text>
                 </View>
               </View>
