@@ -1,13 +1,12 @@
+import React, {useEffect, useState} from 'react';
 import {
-  View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
+  Text,
   TextInput,
-  Image,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import colors from '../../../themes/colors';
-import {useEffect, useState} from 'react';
 import {FontFamily} from '../../../themes/fonts';
 import {Loader} from '../../../core/components/loader';
 import AudioPlayerUI from '../../jobDetails/components/audioPlayer';
@@ -16,17 +15,20 @@ import {
   getAssetServiceDetails,
   getAssetServiceImages,
   resetAssetServiceError,
-  resetError,
 } from '../../../store/reducers/assetReducers/getAssetDetails';
 import {useToast} from 'react-native-toast-notifications';
 import {scaleFont} from '../../../utils/helper';
+import MaterialIcons from '@react-native-vector-icons/material-icons';
+
 interface serviceProps {
   code: string;
 }
+
 export const AssetServices = (props: serviceProps) => {
   const {code} = props;
-  const [selectedService, setSelectedService] = useState();
-  const [selectedServiceIndex, setSelectedServiceIndex] = useState();
+  const [selectedService, setSelectedService] = useState<any>(null);
+  const [selectedServiceIndex, setSelectedServiceIndex] = useState<number | null>(null);
+
   const dispatch = useAppDispatch();
   const toast = useToast();
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
@@ -35,9 +37,10 @@ export const AssetServices = (props: serviceProps) => {
     assetServiceError,
     assetServices,
     assetServiceLoading,
-    assetServicesImages,
   } = useAppSelector(state => state.assetDetails);
-  const serviceDetails = assetServices?.data;
+
+  const serviceDetails = assetServices?.data || [];
+
   useEffect(() => {
     dispatch(
       getAssetServiceDetails({
@@ -56,169 +59,253 @@ export const AssetServices = (props: serviceProps) => {
       }),
     );
   }, []);
+
   useEffect(() => {
-    if (assetServiceStatus == 'failed' && assetServiceError) {
+    if (assetServiceStatus === 'failed' && assetServiceError) {
       toast.show(assetServiceError);
       dispatch(resetAssetServiceError());
     }
   }, [assetServiceStatus]);
 
-  return (
-    <>
-      <View style={styles.container}>
-        {assetServiceLoading ? (
-          <Loader />
-        ) : assetServiceStatus === 'failed' ? null : (
-          <>
-            {serviceDetails?.map((service: any, index: number) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.button,
-                  {
-                    backgroundColor:
-                      selectedServiceIndex == index ? colors.red : colors.white,
-                  },
-                ]}
-                onPress={() => {
-                  setSelectedServiceIndex(index);
-                  setSelectedService(service);
-                }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    height: 50,
-                  }}>
-                  <Text
-                    style={[
-                      styles.serviceTypes,
-                      {
-                        color:
-                          selectedServiceIndex == index
-                            ? colors.white
-                            : colors.black,
-                      },
-                    ]}>
-                    {`${index + 1} - ${service.service_description}`}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+  // Select first service by default if available
+  useEffect(() => {
+    if (serviceDetails.length > 0 && selectedServiceIndex === null) {
+      setSelectedServiceIndex(0);
+      setSelectedService(serviceDetails[0]);
+    }
+  }, [serviceDetails]);
 
-            <View style={styles.headerView}>
-              <Text style={[styles.headerText, {width: '30%'}]}>
-                DESCRIPTION
-              </Text>
-              <Text style={[styles.headerText, styles.typeContainer]}>
-                {/* {`TYPE-${ticketDetails?.type_name}`} */}
-              </Text>
-            </View>
-            <View
-              style={{
-                backgroundColor: colors.white,
-                marginHorizontal: 10,
-                borderBottomRightRadius: 10,
-                paddingBottom: 10,
-              }}>
+  return (
+    <View style={styles.container}>
+      {assetServiceLoading ? (
+        <View style={styles.loaderContainer}>
+          <Loader />
+        </View>
+      ) : serviceDetails.length === 0 ? (
+        <View style={styles.emptyStateCard}>
+          <MaterialIcons name="build-circle" size={48} color={colors.grey} />
+          <Text style={styles.emptyTitle}>No Service History</Text>
+          <Text style={styles.emptySubtitle}>
+            There are no recorded service logs for asset #{code}
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* Services Checklist Header */}
+          <View style={styles.sectionHeaderRow}>
+            <MaterialIcons name="build" size={18} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Asset Service Records ({serviceDetails.length})</Text>
+          </View>
+
+          {/* Service Items List */}
+          <View style={styles.servicesList}>
+            {serviceDetails.map((service: any, index: number) => {
+              const isSelected = selectedServiceIndex === index;
+              return (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.serviceCard,
+                    isSelected && styles.selectedServiceCard,
+                  ]}
+                  onPress={() => {
+                    setSelectedServiceIndex(index);
+                    setSelectedService(service);
+                  }}>
+                  <View style={styles.serviceRow}>
+                    <View
+                      style={[
+                        styles.indexBadge,
+                        isSelected && styles.selectedIndexBadge,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.indexBadgeText,
+                          isSelected && styles.selectedIndexBadgeText,
+                        ]}>
+                        {index + 1}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.serviceTitleText,
+                        isSelected && styles.selectedServiceTitleText,
+                      ]}>
+                      {service.service_description}
+                    </Text>
+
+                    <MaterialIcons
+                      name={isSelected ? 'check-circle' : 'chevron-right'}
+                      size={20}
+                      color={isSelected ? colors.white : colors.grey}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Service Remarks & Audio Section */}
+          {selectedService && (
+            <View style={styles.remarksCard}>
+              <View style={styles.remarksHeaderRow}>
+                <MaterialIcons name="edit-note" size={20} color={colors.primary} />
+                <Text style={styles.remarksTitle}>Technician Remarks & Voice Note</Text>
+              </View>
+
               <TextInput
                 editable={false}
-                style={{
-                  height: 100,
-                  fontFamily: FontFamily.deupRegular,
-                  marginLeft: 10,
-                }}
-                value={selectedService?.tech_remarks}
+                multiline
+                style={styles.remarksInput}
+                value={selectedService?.tech_remarks || 'No remarks recorded for this service.'}
               />
-              {/* )} */}
 
               <AudioPlayerUI
                 isAssets={true}
                 track={selectedService?.tech_audio_file}
-                // isLocal={serviceStatusData?.data[0] ? false : true}
               />
             </View>
-          </>
-        )}
-      </View>
-      {/* <View style={{flexDirection:'row',}}>
-    {assetServicesImages?.data?.map((item,index)=>(
-      <Image source={{uri:item.service_image_name}}
-      style={styles.images}
-      key={index}/>
-    ))
-}
-
-  </View> */}
-    </>
+          )}
+        </>
+      )}
+    </View>
   );
 };
 
+export default AssetServices;
+
 const styles = StyleSheet.create({
   container: {
-    //  flex: 1,
-    margin: 10,
+    marginVertical: 4,
   },
-  button: {
-    paddingRight: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  loaderContainer: {
+    paddingVertical: 40,
     alignItems: 'center',
-    // backgroundColor: colors.white,
-    margin: 5,
-    marginHorizontal: 10,
   },
-  serviceTypes: {
-    color: colors.black,
-    fontSize: scaleFont(18),
-    fontFamily: FontFamily.deupRegular,
-    marginLeft: 10,
-  },
-  header: {
-    backgroundColor: colors.red,
-    height: 40,
-    paddingHorizontal: 10,
-    borderTopLeftRadius: 10,
-    flexDirection: 'row',
+  emptyStateCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 30,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  headerView: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 10,
-    marginTop: 5,
-  },
-  details: {
-    paddingTop: 0,
-    padding: 15,
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: 10,
-  },
-  detailText: {
-    fontFamily: FontFamily.deupRegular,
-    color: colors.white,
+  emptyTitle: {
     fontSize: scaleFont(16),
-    width: '30%',
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginTop: 10,
   },
-  headerText: {
-    color: colors.white,
-    fontFamily: FontFamily.deupRegular,
-    fontSize: scaleFont(16),
-    marginLeft: 10,
-  },
-  typeContainer: {
-    backgroundColor: colors.red,
-    width: '60%',
-    paddingVertical: 8,
-    borderTopRightRadius: 10,
-    borderTopLeftRadius: 10,
+  emptySubtitle: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.regular,
+    color: colors.grey,
     textAlign: 'center',
+    marginTop: 4,
   },
-  images: {
-    height: 50,
-    width: 50,
-    borderRadius: 25,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  sectionTitle: {
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginLeft: 6,
+  },
+  servicesList: {
+    marginBottom: 12,
+  },
+  serviceCard: {
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+  },
+  selectedServiceCard: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  indexBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  selectedIndexBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  indexBadgeText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  selectedIndexBadgeText: {
+    color: colors.white,
+  },
+  serviceTitleText: {
+    flex: 1,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  selectedServiceTitleText: {
+    color: colors.white,
+  },
+  remarksCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  remarksHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  remarksTitle: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginLeft: 6,
+  },
+  remarksInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.medium,
+    color: colors.header,
+    textAlignVertical: 'top',
+    height: 80,
+    marginBottom: 10,
   },
 });
