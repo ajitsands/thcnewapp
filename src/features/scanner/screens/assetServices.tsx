@@ -78,12 +78,13 @@ export const AssetServices = (props: serviceProps) => {
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
-    const parsed = moment(dateStr);
-    return parsed.isValid() ? parsed.format('DD MMM YYYY') : dateStr;
+    const parsed = moment(dateStr, ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD', moment.ISO_8601]);
+    return parsed.isValid() ? parsed.format('DD MMM YYYY, hh:mm A') : dateStr;
   };
 
   const getServiceDate = (service: any) => {
     return (
+      service?.completed_date ||
       service?.visit_date ||
       service?.service_date ||
       service?.created_date ||
@@ -242,7 +243,7 @@ export const AssetServices = (props: serviceProps) => {
                   </Text>
                 </View>
                 <View style={styles.detailMetaItem}>
-                  <Text style={styles.detailMetaLabel}>SERVICE DATE</Text>
+                  <Text style={styles.detailMetaLabel}>COMPLETED DATE & TIME</Text>
                   <Text style={styles.detailMetaValue}>
                     {getServiceDate(selectedService)
                       ? formatDate(getServiceDate(selectedService))
