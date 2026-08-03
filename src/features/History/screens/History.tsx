@@ -11,19 +11,22 @@ import colors from '../../../themes/colors';
 import {Header} from '../../../core/components/header';
 import {HeaderBar} from '../../../core/components/headerBar';
 import {FontFamily} from '../../../themes/fonts';
-import {useAppSelector} from '../../../store';
+import {useAppDispatch, useAppSelector} from '../../../store';
 import {ErrorModal} from '../../../core/components/errorModal';
 import {scaleFont} from '../../../utils/helper';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import {navigate} from '../../../navigators';
+import {getTicketDetails} from '../../../store/reducers/getTicketDetails';
 
 export const HistoryScreen = () => {
+  const dispatch = useAppDispatch();
   const [showModal, setShowModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('ALL');
 
   const {data, loading, error} = useAppSelector(state => state.history);
+  const {apiKey, employeeCode} = useAppSelector(state => state.app);
+  const ticketLoading = useAppSelector(state => state.tickets.loading);
   const historyData = data?.data || [];
 
   useEffect(() => {
@@ -61,12 +64,24 @@ export const HistoryScreen = () => {
     return {bg: '#F1F5F9', text: colors.header, icon: 'info'};
   };
 
+  const handleTicketPress = (item: any) => {
+    dispatch(
+      getTicketDetails({
+        action: 'get_amc_ticket_details',
+        emp_code: employeeCode,
+        APIKEY: apiKey,
+        visit_date: item.visit_date,
+        amc_ticket_ref_no: item.ticket_ref_no,
+      }),
+    );
+  };
+
   const filterOptions = ['ALL', 'COMPLETED', 'PENDING', 'IN PROGRESS'];
 
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay visible={loading || ticketLoading} />
 
       <View style={styles.mainContent}>
         <HeaderBar title="WORK ORDER HISTORY" />
@@ -133,9 +148,7 @@ export const HistoryScreen = () => {
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.historyCard}
-                onPress={() => {
-                  navigate('WorkDetails', {ticketRefNo: item.ticket_ref_no});
-                }}>
+                onPress={() => handleTicketPress(item)}>
                 <View style={styles.cardHeader}>
                   <View style={styles.ticketRefRow}>
                     <MaterialIcons name="assignment" size={18} color={colors.primary} />
