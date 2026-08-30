@@ -27,7 +27,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import LoadingOverlay from '../../core/components/loadingOverlay';
 import {scaleFont} from '../../utils/helper';
 
-const HomeScreen = () => {
+export const HomeScreen = () => {
   const items = [
     {
       icon: require('../../assets/images/bar_code.png'),
