@@ -282,7 +282,7 @@ export const AssetServices = (props: serviceProps) => {
 
               <AudioPlayerUI
                 isAssets={true}
-                track={selectedService?.tech_audio_file}
+                track={selectedService?.tech_audio_file || selectedService?.tech_audio}
               />
             </View>
           )}

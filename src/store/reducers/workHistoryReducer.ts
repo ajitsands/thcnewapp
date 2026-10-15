@@ -17,10 +17,24 @@ interface historyDetails {
 
 export const getWorkHistory = createAsyncThunk(
   'work/getHistory',
-  async (params: historyDetails, {rejectWithValue}) => {
+  async (params: any, {rejectWithValue, getState}) => {
     try {
       console.log(params);
-      const response = await getRequest(ApiUrl.getRequisitionURL, params);
+      const state: any = getState();
+      const isJanitor =
+        (state?.app?.employeeType || '').toLowerCase().includes('janitor') ||
+        String(params?.emp_code || state?.app?.employeeCode || '').toUpperCase().startsWith('CG-THC');
+
+      const targetUrl = isJanitor ? ApiUrl.janitorURL : ApiUrl.getRequisitionURL;
+      const targetParams = isJanitor
+        ? {
+            action: 'get_execution_history',
+            APIKEY: params?.APIKEY || state?.app?.apiKey || ApiUrl.janitorApiKey,
+            emp_code: params?.emp_code || state?.app?.employeeCode,
+          }
+        : params;
+
+      const response = await getRequest(targetUrl, targetParams);
       console.log(response);
       if (response.data.status == 'Failed') {
         throw new Error(response?.data?.api_message);
@@ -31,7 +45,7 @@ export const getWorkHistory = createAsyncThunk(
         }
       }
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       return rejectWithValue(error?.message || 'Something went wrong');
     }
   },

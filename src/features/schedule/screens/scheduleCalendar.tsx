@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect} from 'react';
+import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import moment from 'moment';
 import {Header} from '../../../core/components/header';
@@ -16,6 +17,8 @@ import {navigate} from '../../../navigators';
 import {scaleFont} from '../../../utils/helper';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {getScheduleSlots} from '../../../store/reducers/getSlots';
+import {getScheduleDates} from '../../../store/reducers/getSchedules';
+import {useFocusEffect} from '@react-navigation/native';
 import LoadingOverlay from '../../../core/components/loadingOverlay';
 import {useToast} from 'react-native-toast-notifications';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
@@ -61,15 +64,15 @@ const generateMonthDays = (date: moment.Moment) => {
 const MonthView = ({
   month,
   markedDates,
+  selectedDate,
+  onSelectDate,
 }: {
   month: moment.Moment;
   markedDates: Record<string, boolean>;
+  selectedDate: string | null;
+  onSelectDate: (date: moment.Moment) => void;
 }) => {
   const days = generateMonthDays(month);
-  const [selectedDay, setSelectedDay] = useState(moment());
-  const dispatch = useAppDispatch();
-  const {apiKey, employeeCode} = useAppSelector(state => state.app);
-  const {loading} = useAppSelector(state => state.schedules);
 
   return (
     <View style={[styles.monthContainer, {width: itemWidth}]}>
@@ -92,7 +95,7 @@ const MonthView = ({
         {days.map(({date, isCurrentMonth}, index) => {
           const formattedDate = date.format('YYYY-MM-DD');
           const isMarked = !!markedDates[formattedDate];
-          const isSelected = selectedDay.isSame(date, 'day');
+          const isSelected = selectedDate === formattedDate;
           const isToday = moment().isSame(date, 'day');
 
           return (
@@ -101,39 +104,29 @@ const MonthView = ({
               activeOpacity={0.7}
               style={[
                 styles.dayCell,
+                isToday && !isSelected && styles.todayCell,
+                isMarked && !isSelected && isCurrentMonth && styles.markedDayCell,
                 isSelected && styles.selectedDayCell,
                 !isCurrentMonth && styles.otherMonthCell,
               ]}
-              onPress={() => {
-                setSelectedDay(date);
-                dispatch(
-                  getScheduleSlots({
-                    action: 'get_date_slots',
-                    APIKEY: apiKey,
-                    emp_code: employeeCode,
-                    visit_date: date.format('YYYY-MM-DD'),
-                  }),
-                );
-                navigate('ScheduleSlots', {
-                  day: date.format('MMMM DD, YYYY'),
-                });
-              }}>
+              onPress={() => onSelectDate(date)}>
               <Text
                 style={[
                   styles.dayText,
                   !isCurrentMonth && styles.otherMonthDayText,
-                  isToday && styles.todayText,
+                  isToday && !isSelected && styles.todayText,
+                  isMarked && !isSelected && isCurrentMonth && styles.markedDayText,
                   isSelected && styles.selectedDayText,
                 ]}>
                 {date.date()}
               </Text>
 
               {/* Marked Scheduled Event Dot Badge */}
-              {isMarked && !loading && (
+              {isMarked && isCurrentMonth && (
                 <View
                   style={[
                     styles.markedDot,
-                    isSelected && {backgroundColor: colors.secondary},
+                    isSelected && styles.markedDotSelected,
                   ]}
                 />
               )}
@@ -148,8 +141,61 @@ const MonthView = ({
 export const ScheduleCalendar = () => {
   const flatListRef = useRef<FlatList>(null);
   const toast = useToast();
-
+  const dispatch = useAppDispatch();
+  const appState = useAppSelector(state => state.app);
+  const userLoginData = useAppSelector(state => state.userLogin.data);
+  const profileDetails = useAppSelector(state => state.profile.profileDetails);
   const {data, error, loading} = useAppSelector(state => state.schedules);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const apiKey =
+    appState?.apiKey ||
+    userLoginData?.APIKEY ||
+    userLoginData?.apiKey ||
+    profileDetails?.data?.APIKEY ||
+    '';
+
+  const employeeCode =
+    appState?.employeeCode ||
+    userLoginData?.employee_code ||
+    userLoginData?.emp_code ||
+    profileDetails?.data?.employee_code ||
+    profileDetails?.employee_code ||
+    '';
+
+  const employeeId =
+    appState?.employeeId ||
+    userLoginData?.employeeId ||
+    userLoginData?.id ||
+    userLoginData?.emp_id ||
+    profileDetails?.data?.id ||
+    '';
+
+  const fetchDates = useCallback(async () => {
+    console.log('[ScheduleCalendar] Fetching dates for emp:', employeeCode, 'id:', employeeId);
+    await dispatch(
+      getScheduleDates({
+        action: 'get_schedule_dates',
+        APIKEY: apiKey,
+        emp_code: employeeCode,
+        emp_id: employeeId,
+      }),
+    );
+  }, [apiKey, employeeCode, employeeId, dispatch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDates();
+    }, [fetchDates]),
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchDates();
+    setRefreshing(false);
+  };
+
   const initialIndex = 5 * 12; // middle of the range
   const [currentMonthIndex, setCurrentMonthIndex] = useState(initialIndex);
   const currentMonth = moment().startOf('month');
@@ -162,12 +208,60 @@ export const ScheduleCalendar = () => {
       .add(i, 'months'),
   );
 
-  const markedDates =
-    data?.data?.reduce((acc: any, schedule: any) => {
-      const date = moment(schedule.visit_date).format('YYYY-MM-DD');
-      acc[date] = true;
-      return acc;
-    }, {}) || {};
+  // Extract schedule items from whatever shape the backend returns:
+  const rawScheduleData =
+    data?.data ||
+    data?.schedule_dates ||
+    data?.dates ||
+    data?.schedule ||
+    data?.result ||
+    data;
+
+  const scheduleList: any[] = Array.isArray(rawScheduleData)
+    ? rawScheduleData
+    : typeof rawScheduleData === 'object' && rawScheduleData !== null
+    ? Object.values(rawScheduleData)
+    : [];
+
+  const markedDates: Record<string, boolean> = {};
+  scheduleList.forEach((schedule: any) => {
+    if (!schedule) return;
+    const rawDate =
+      typeof schedule === 'string'
+        ? schedule
+        : schedule?.visit_date ||
+          schedule?.date ||
+          schedule?.schedule_date ||
+          schedule?.assigned_date ||
+          schedule?.service_date ||
+          schedule?.slot_date;
+
+    if (rawDate) {
+      const cleanDate = typeof rawDate === 'string' ? rawDate.split(' ')[0].trim() : rawDate;
+      const m = moment(cleanDate);
+      if (m.isValid()) {
+        markedDates[m.format('YYYY-MM-DD')] = true;
+      }
+    }
+  });
+
+  const onSelectDate = (date: moment.Moment) => {
+    const dateStr = date.format('YYYY-MM-DD');
+    setSelectedDate(dateStr);
+    console.log('[ScheduleCalendar] Selected date:', dateStr);
+    dispatch(
+      getScheduleSlots({
+        action: 'get_date_slots',
+        APIKEY: apiKey,
+        emp_code: employeeCode,
+        emp_id: employeeId,
+        visit_date: dateStr,
+      }),
+    );
+    navigate('ScheduleSlots', {
+      day: date.format('MMMM DD, YYYY'),
+    });
+  };
 
   const handleScroll = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / itemWidth);
@@ -187,12 +281,27 @@ export const ScheduleCalendar = () => {
     }
   }, [error]);
 
+  const activeMonth = months[currentMonthIndex];
+  const activeMonthKey = activeMonth?.format('YYYY-MM');
+  const thisMonthVisits = Object.keys(markedDates)
+    .filter(d => d.startsWith(activeMonthKey))
+    .sort();
+
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay visible={loading && !refreshing} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary, '#DC2626']}
+          />
+        }>
         {/* Month Navigation Control Header */}
         <View style={styles.monthHeaderCard}>
           <TouchableOpacity
@@ -209,12 +318,21 @@ export const ScheduleCalendar = () => {
             </Text>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => scrollToMonth(1)}
-            style={styles.navArrowBtn}>
-            <MaterialIcons name="chevron-right" size={26} color={colors.primary} />
-          </TouchableOpacity>
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onRefresh}
+              style={[styles.navArrowBtn, {marginRight: 8}]}>
+              <MaterialIcons name="refresh" size={20} color={colors.primary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => scrollToMonth(1)}
+              style={styles.navArrowBtn}>
+              <MaterialIcons name="chevron-right" size={26} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Calendar Card Container */}
@@ -230,7 +348,12 @@ export const ScheduleCalendar = () => {
             keyExtractor={item => item.toString()}
             initialScrollIndex={initialIndex}
             renderItem={({item}) => (
-              <MonthView month={item} markedDates={markedDates} />
+              <MonthView
+                month={item}
+                markedDates={markedDates}
+                selectedDate={selectedDate}
+                onSelectDate={onSelectDate}
+              />
             )}
             getItemLayout={(_, index) => ({
               length: itemWidth,
@@ -251,7 +374,7 @@ export const ScheduleCalendar = () => {
         {/* Calendar Legend Card */}
         <View style={styles.legendCard}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, {backgroundColor: colors.red}]} />
+            <View style={[styles.legendDot, {backgroundColor: '#DC2626'}]} />
             <Text style={styles.legendText}>Scheduled Visit</Text>
           </View>
           <View style={styles.legendItem}>
@@ -259,6 +382,33 @@ export const ScheduleCalendar = () => {
             <Text style={styles.legendText}>Selected Date</Text>
           </View>
         </View>
+
+        {/* Scheduled Visits for Active Month */}
+        {thisMonthVisits.length > 0 && (
+          <View style={styles.visitsCard}>
+            <View style={styles.visitsCardHeader}>
+              <MaterialIcons name="event-available" size={20} color="#DC2626" style={{marginRight: 6}} />
+              <Text style={styles.visitsCardTitle}>
+                Visits Scheduled ({thisMonthVisits.length})
+              </Text>
+            </View>
+            <View style={styles.visitsChipsRow}>
+              {thisMonthVisits.map(visitDate => {
+                const m = moment(visitDate);
+                return (
+                  <TouchableOpacity
+                    key={visitDate}
+                    activeOpacity={0.8}
+                    style={styles.visitChip}
+                    onPress={() => onSelectDate(m)}>
+                    <MaterialIcons name="schedule" size={15} color="#DC2626" style={{marginRight: 5}} />
+                    <Text style={styles.visitChipText}>{m.format('ddd, MMM DD')}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -349,6 +499,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     position: 'relative',
   },
+  todayCell: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    backgroundColor: '#EEF2FF',
+  },
+  markedDayCell: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
   selectedDayCell: {
     backgroundColor: colors.primary,
     elevation: 3,
@@ -369,7 +529,11 @@ const styles = StyleSheet.create({
     color: colors.grey,
   },
   todayText: {
-    color: colors.red,
+    color: colors.primary,
+    fontFamily: FontFamily.bold,
+  },
+  markedDayText: {
+    color: '#DC2626',
     fontFamily: FontFamily.bold,
   },
   selectedDayText: {
@@ -377,12 +541,20 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
   markedDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.red,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#DC2626',
     position: 'absolute',
-    bottom: 6,
+    bottom: 5,
+  },
+  markedDotSelected: {
+    backgroundColor: '#FF4D4D',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   legendCard: {
     flexDirection: 'row',
@@ -410,6 +582,52 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(12),
     fontFamily: FontFamily.medium,
     color: colors.header,
+  },
+  visitsCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 14,
+    elevation: 3,
+    shadowColor: '#0B2C51',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  visitsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 8,
+  },
+  visitsCardTitle: {
+    fontSize: scaleFont(14),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+  },
+  visitsChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  visitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  visitChipText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.bold,
+    color: '#DC2626',
   },
 });
 

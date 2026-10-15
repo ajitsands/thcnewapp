@@ -1,5 +1,5 @@
 import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
-import {getRequest} from '../../../network/services';
+import {getRequest, postRequest} from '../../../network/services';
 import {ApiUrl} from '../../../network/endpoints';
 const initialState = {
   completeTicketData: null,
@@ -16,19 +16,90 @@ interface completeTicket {
   APIKEY: string;
   emp_code: string;
   emp_name: string;
+  emp_id?: string;
 }
 export const completeTicketAction = createAsyncThunk(
   'service/completeTicket',
   async (params: completeTicket, {rejectWithValue}) => {
     try {
-      console.log(params);
-      const response = await getRequest(ApiUrl.getScheduleURL, params);
-      if (response.data.status == 'Failed') {
-        throw new Error(response?.data?.api_message);
+      console.log('========================================');
+      console.log('[COMPLETE TICKET ACTION] Initiating API Call');
+      console.log('Params Received:', JSON.stringify(params, null, 2));
+
+      const requestParams: any = {
+        action: 'complete_ticket',
+        APIKEY: params.APIKEY,
+        emp_id: params.emp_id || '',
+        employee_id: params.emp_id || '',
+        emp_code: params.emp_code,
+        employee_code: params.emp_code,
+        technician_code: params.emp_code,
+        emp_name: params.emp_name || '',
+        employee_name: params.emp_name || '',
+        technician_name: params.emp_name || '',
+        amc_ticket: params.amc_ticket,
+        amc_tkt_id: params.amc_tkt_id,
+        ticket_id: params.amc_tkt_id,
+        amc_ticket_ref_no: params.amc_ticket_ref_no,
+        ticket_ref_code: params.amc_ticket_ref_no,
+        visit_date: params.visit_date,
+        date: params.visit_date,
+      };
+
+      console.log('[COMPLETE TICKET ACTION] Outgoing Request Query/Body:');
+      console.log(JSON.stringify(requestParams, null, 2));
+      console.log('========================================');
+
+      let response: any;
+      try {
+        response = await getRequest(ApiUrl.getScheduleURL, requestParams);
+      } catch (getErr) {
+        console.warn('[COMPLETE TICKET ACTION] GET failed, trying POST FormData:', getErr);
+        const formData = new FormData();
+        Object.keys(requestParams).forEach(key => {
+          formData.append(key, requestParams[key] ?? '');
+        });
+        response = await postRequest(ApiUrl.getScheduleURL, formData);
       }
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error?.message || 'Something went wrong');
+
+      console.log('completeTicketAction response:', response?.status, response?.data);
+
+      const resData = response?.data;
+
+      if (resData?.status === 'Failed' || resData?.status === 'failed') {
+        return rejectWithValue(resData?.api_message || 'Failed to complete job on server');
+      }
+
+      if (
+        resData === 1 ||
+        resData === '1' ||
+        resData?.status === 'Success' ||
+        resData?.status === 'success' ||
+        (typeof resData === 'string' && resData.toLowerCase().includes('success')) ||
+        (response?.status >= 200 && response?.status < 300)
+      ) {
+        return typeof resData === 'object' && resData !== null
+          ? resData
+          : {status: 'Success', raw: resData};
+      }
+
+      return resData || {status: 'Success'};
+    } catch (error: any) {
+      console.warn('completeTicketAction error:', error);
+      const serverMsg =
+        error?.response?.data?.api_message ||
+        error?.response?.data?.message ||
+        error?.api_message;
+
+      if (serverMsg) {
+        return rejectWithValue(serverMsg);
+      }
+
+      return rejectWithValue(
+        typeof error === 'string'
+          ? error
+          : error?.message || 'Failed to complete job on server',
+      );
     }
   },
 );

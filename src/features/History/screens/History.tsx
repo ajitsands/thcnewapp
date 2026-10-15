@@ -40,16 +40,21 @@ export const HistoryScreen = () => {
 
   // Filtered List based on Search & Status Filter
   const filteredHistory = historyData.filter((item: any) => {
+    const refNo = item.ticket_ref_no || item.assignment_ref_no || (item.execution_id ? String(item.execution_id) : '');
+    const dateStr = item.visit_date || item.executed_date || '';
+    const extraText = item.checklist_name || item.asset_description || item.building_name || '';
+
     const matchesSearch =
-      (item.ticket_ref_no &&
-        item.ticket_ref_no.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.visit_date && item.visit_date.includes(searchQuery));
+      (refNo && refNo.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (dateStr && dateStr.includes(searchQuery)) ||
+      (extraText && extraText.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (selectedFilter === 'ALL') return matchesSearch;
+    const currentStatus = item.ticket_status || item.status || '';
     return (
       matchesSearch &&
-      item.ticket_status &&
-      item.ticket_status.toUpperCase() === selectedFilter.toUpperCase()
+      currentStatus &&
+      currentStatus.toUpperCase() === selectedFilter.toUpperCase()
     );
   });
 
@@ -68,11 +73,20 @@ export const HistoryScreen = () => {
   };
 
   const handleTicketPress = (item: any) => {
+    if (item.assignment_ref_no || item.checklist_name) {
+      // Janitor completed job
+      if (item.remarks) {
+        toast.show(`Remarks: ${item.remarks}`);
+      }
+      return;
+    }
+
     const formattedDate = item.visit_date
       ? moment(item.visit_date, ['YYYY-MM-DD', 'DD-MM-YYYY', 'YYYY/MM/DD']).format('YYYY-MM-DD')
       : moment().format('YYYY-MM-DD');
 
     const ticketRef = item.ticket_ref_no || item.amc_ticket_ref_no || item.ticket_id;
+    const slotNumber = item.slot_number || item.slot_id || item.slot || '';
 
     dispatch(
       getTicketDetails({
@@ -81,6 +95,7 @@ export const HistoryScreen = () => {
         APIKEY: apiKey,
         visit_date: formattedDate,
         amc_ticket_ref_no: ticketRef,
+        ...(slotNumber ? {slot_number: slotNumber, slot_id: slotNumber} : {}),
       }),
     )
       .unwrap()
@@ -162,7 +177,11 @@ export const HistoryScreen = () => {
             ) : null
           }
           renderItem={({item}) => {
-            const statusConfig = getStatusColor(item.ticket_status);
+            const statusText = item.status || item.ticket_status || 'Completed';
+            const statusConfig = getStatusColor(statusText);
+            const refNo = item.assignment_ref_no || item.ticket_ref_no || (item.execution_id ? `JOB-${item.execution_id}` : 'Work Order');
+            const dateVal = item.executed_date || item.visit_date || '';
+
             return (
               <TouchableOpacity
                 activeOpacity={0.85}
@@ -170,8 +189,12 @@ export const HistoryScreen = () => {
                 onPress={() => handleTicketPress(item)}>
                 <View style={styles.cardHeader}>
                   <View style={styles.ticketRefRow}>
-                    <MaterialIcons name="assignment" size={18} color={colors.primary} />
-                    <Text style={styles.ticketRefText}>{item.ticket_ref_no}</Text>
+                    <MaterialIcons
+                      name={item.checklist_name ? 'cleaning-services' : 'assignment'}
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.ticketRefText}>{refNo}</Text>
                   </View>
 
                   <View
@@ -189,10 +212,23 @@ export const HistoryScreen = () => {
                         styles.statusBadgeText,
                         {color: statusConfig.text},
                       ]}>
-                      {item.ticket_status}
+                      {statusText}
                     </Text>
                   </View>
                 </View>
+
+                {item.checklist_name ? (
+                  <View style={{marginTop: 6}}>
+                    <Text style={{fontSize: scaleFont(14), fontFamily: FontFamily.bold, color: colors.header}}>
+                      {item.checklist_name}
+                    </Text>
+                    {item.building_name ? (
+                      <Text style={{fontSize: scaleFont(12), fontFamily: FontFamily.regular, color: '#64748B', marginTop: 2}}>
+                        {item.building_name} {item.location_name ? `(${item.location_name})` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
 
                 <View style={styles.cardDivider} />
 
@@ -200,11 +236,18 @@ export const HistoryScreen = () => {
                   <View style={styles.infoRow}>
                     <MaterialIcons name="event" size={16} color={colors.grey} />
                     <Text style={styles.dateText}>
-                      Date: <Text style={styles.dateValue}>{item.visit_date}</Text>
+                      Date: <Text style={styles.dateValue}>{dateVal}</Text>
+                      {item.executed_slot ? ` • ${item.executed_slot}` : ''}
                     </Text>
                   </View>
 
-                  <MaterialIcons name="chevron-right" size={24} color={colors.grey} />
+                  {item.total_points ? (
+                    <Text style={{fontSize: scaleFont(11), fontFamily: FontFamily.bold, color: '#059669'}}>
+                      {item.completed_points || '0'}/{item.total_points} tasks done
+                    </Text>
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={24} color={colors.grey} />
+                  )}
                 </View>
               </TouchableOpacity>
             );

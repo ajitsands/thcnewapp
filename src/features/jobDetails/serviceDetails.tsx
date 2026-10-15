@@ -26,6 +26,7 @@ import {
 import moment from 'moment';
 import {getServiceImages} from '../../store/reducers/serviceReducers/getserviceImages';
 import {PickerImage} from './components/imagePicker';
+import {MaterialRequisitionModal} from './components/materialRequisitionModal';
 import {
   resetStatus,
   startJob,
@@ -49,13 +50,14 @@ import {completeTicketAction} from '../../store/reducers/serviceReducers/complet
 import {useToast} from 'react-native-toast-notifications';
 import {useFocusEffect} from '@react-navigation/native';
 import {scaleFont} from '../../utils/helper';
+import {navigate} from '../../navigators';
 
 export const ServiceDetails = () => {
   const {data} = useAppSelector(state => state.tickets) || {};
   const {activeSlots, visitDate} = useAppSelector(state => state.slots);
 
   const {loading} = useAppSelector(state => state.service);
-  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
+  const {apiKey, employeeCode, employeeId, empName} = useAppSelector(state => state.app);
   const ticketDetails = data?.data[0];
   const {ticketType} = useAppSelector(state => state.tickets);
   const {
@@ -64,22 +66,52 @@ export const ServiceDetails = () => {
     serviceSlotsData,
   } = useAppSelector(state => state.service);
   const serviceTypes = useAppSelector(state => state.service.data);
-  const {startJobStatus, startJobError} = useAppSelector(
+  const {startJobStatus, startJobError, startJobLoading} = useAppSelector(
     state => state.startJob,
   );
-  const {stopJobStatus, stopJobError} = useAppSelector(
+  const {stopJobStatus, stopJobError, stopJobLoading} = useAppSelector(
     state => state.stopJob,
   );
-  const {restartJobStatus, restartJobError} = useAppSelector(
+  const {restartJobStatus, restartJobError, restartJobLoading} = useAppSelector(
     state => state.restartJob,
   );
-  const {completeJobStatus, completeJobError} =
+  const {completeJobStatus, completeJobError, completeJobLoading} =
     useAppSelector(state => state.completeJob);
   const {serviceImages} = useAppSelector(state => state.serviceImages);
+  const profileData = useAppSelector(state => (state.profile as any)?.data);
+  const teamList = useAppSelector(state => (state.team as any)?.data?.data || (state.team as any)?.data || []);
+  const currentTeamMember = Array.isArray(teamList)
+    ? teamList.find((m: any) => m?.employee_code?.toString() === employeeCode?.toString())
+    : null;
+
+  const effectiveEmpId =
+    employeeId ||
+    currentTeamMember?.employee_id ||
+    currentTeamMember?.ticket_team_ids ||
+    profileData?.data?.[0]?.employee_id ||
+    profileData?.employee_id ||
+    '';
+
+  const effectiveEmpCode =
+    employeeCode ||
+    currentTeamMember?.employee_code ||
+    profileData?.data?.[0]?.employee_code ||
+    profileData?.employee_code ||
+    '';
+
+  const effectiveEmpName =
+    empName ||
+    currentTeamMember?.employee_name ||
+    profileData?.data?.[0]?.employee_name ||
+    profileData?.data?.employee_name ||
+    profileData?.employee_name ||
+    '';
   
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showRequisitionModal, setShowRequisitionModal] = useState(false);
+  const [isTicketCompletedSuccess, setIsTicketCompletedSuccess] = useState(false);
   const [jobStartItem, setJobStartItem] = useState<any>(null);
   const [completePressed, setCompletePressed] = useState(false);
   const [errorText, setErrorText] = useState('');
@@ -88,16 +120,32 @@ export const ServiceDetails = () => {
   const [cleared, setCleared] = useState(false);
   const [selectedService, setSelectedService] = useState<number | null>(null);
 
+  const handleAudioRecorded = (path: string) => {
+    console.log('[serviceDetails] Audio recorded at path:', path);
+    setAudioPath(path);
+  };
+
   const slots = serviceSlotsData?.data?.[0];
   const startSlot = parseInt(slots?.start_slot || '1');
   const slotCount = parseInt(slots?.additional_slots || '0');
   const isExtended = slots?.amc_visit_status === 'Extended';
-  const isticketCompleted = slots?.amc_visit_status === 'Completed';
+  const isticketCompleted =
+    slots?.amc_visit_status === 'Completed' ||
+    ticketDetails?.ticket_status === 'Completed' ||
+    ticketDetails?.amc_visit_status === 'Completed';
 
-  const allCompleted =
-    serviceTypes?.data?.every(
+  const hasPhotos =
+    (serviceImages?.data && serviceImages.data.length > 0) ||
+    (Array.isArray(serviceImages) && serviceImages.length > 0);
+
+  const allServicesCompleted =
+    Boolean(serviceTypes?.data &&
+    serviceTypes.data.length > 0 &&
+    serviceTypes.data.every(
       (item: any) => item.ticket_service_status === serviceStatusTypes.completed,
-    ) && serviceImages?.data?.length > 0;
+    ));
+
+  const allCompleted = Boolean(allServicesCompleted && hasPhotos);
 
   const slotNumbers = Array.from(
     {length: slotCount + 1},
@@ -114,10 +162,13 @@ export const ServiceDetails = () => {
 
   useEffect(() => {
     if (serviceStatusData?.data?.[0]) {
-      const remark = serviceStatusData?.data?.[0]?.tech_remarks || '';
+      const item = serviceStatusData.data[0];
+      const remark = item?.tech_remarks || '';
       setDescription(remark);
       setCleared(false);
-      setAudioPath(serviceStatusData?.data?.[0]?.tech_audio);
+      const remoteAudio = item?.tech_audio_file || item?.tech_audio || '';
+      console.log('[ServiceDetails] Loaded audio from server:', remoteAudio);
+      setAudioPath(remoteAudio);
     }
   }, [serviceStatusData]);
 
@@ -132,21 +183,54 @@ export const ServiceDetails = () => {
           emp_code: employeeCode,
         }),
       );
-    }, [ticketType, ticketDetails?.ticket_id, apiKey, employeeCode]),
+      dispatch(
+        getServiceSlots({
+          action: 'get_slot_details_services',
+          amc_ticket: ticketType,
+          amc_tkt_id: ticketDetails?.ticket_id,
+          APIKEY: apiKey,
+          emp_code: employeeCode,
+          visit_date: visitDate,
+        }),
+      );
+      dispatch(
+        getServiceDetails({
+          action: 'get_visit_services',
+          amc_ticket: ticketType,
+          amc_tkt_id: ticketDetails?.ticket_id,
+          visit_date: visitDate,
+          APIKEY: apiKey,
+          emp_code: employeeCode,
+        }),
+      );
+    }, [ticketType, ticketDetails?.ticket_id, apiKey, employeeCode, visitDate]),
   );
 
+  // Auto-select first service item when serviceTypes data loads or updates
   useEffect(() => {
-    dispatch(
-      getServiceSlots({
-        action: 'get_slot_details_services',
-        amc_ticket: ticketType,
-        amc_tkt_id: ticketDetails?.ticket_id,
-        APIKEY: apiKey,
-        emp_code: employeeCode,
-        visit_date: visitDate,
-      }),
-    );
-  }, []);
+    if (serviceTypes?.data?.length > 0) {
+      const idx =
+        selectedService !== null && selectedService < serviceTypes.data.length
+          ? selectedService
+          : 0;
+      setSelectedService(idx);
+      const currentItem = serviceTypes.data[idx];
+      if (currentItem?.ticket_service_id) {
+        dispatch(
+          getServiceStatusDetails({
+            action: 'get_service_status_details',
+            visit_date: visitDate,
+            amc_ticket: ticketType,
+            amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
+            amc_tkt_id: ticketDetails?.ticket_id,
+            APIKEY: apiKey,
+            emp_code: employeeCode,
+            ticket_service_id: currentItem.ticket_service_id,
+          }),
+        );
+      }
+    }
+  }, [serviceTypes?.data]);
 
   useEffect(() => {
     const jobStatusSuccess =
@@ -194,9 +278,17 @@ export const ServiceDetails = () => {
       dispatch(resetRestartStatus());
     } else if (jobStatusFailed) {
       setShowErrorModal(false);
-      toast.show(
-        startJobError || stopJobError || completeJobError || restartJobError,
-      );
+      const errMsg =
+        startJobError ||
+        stopJobError ||
+        completeJobError ||
+        restartJobError ||
+        'Failed to perform service action';
+      toast.show(errMsg, {type: 'danger'});
+      dispatch(resetStatus());
+      dispatch(resetCompleteStatus());
+      dispatch(resetStopStatus());
+      dispatch(resetRestartStatus());
     }
   }, [startJobStatus, stopJobStatus, completeJobStatus, restartJobStatus]);
 
@@ -224,6 +316,9 @@ export const ServiceDetails = () => {
         ticket_service_id: jobStartItem?.ticket_service_id,
         APIKEY: apiKey,
         emp_code: employeeCode,
+        amc_tkt_id: ticketDetails?.ticket_id,
+        amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
+        visit_date: visitDate,
       }),
     );
     setShowConfirmModal(false);
@@ -237,6 +332,9 @@ export const ServiceDetails = () => {
         ticket_service_id: jobStartItem?.ticket_service_id,
         APIKEY: apiKey,
         emp_code: employeeCode,
+        amc_tkt_id: ticketDetails?.ticket_id,
+        amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
+        visit_date: visitDate,
       }),
     );
     setShowConfirmModal(false);
@@ -252,11 +350,18 @@ export const ServiceDetails = () => {
         emp_code: employeeCode,
         tech_audio: audioPath,
         tech_remarks: description,
+        amc_tkt_id: ticketDetails?.ticket_id,
+        amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
+        visit_date: visitDate,
       }),
     );
   };
 
   const handleJobRestart = () => {
+    const formattedDate = visitDate
+      ? moment(visitDate).format('YYYY-MM-DD')
+      : moment().format('YYYY-MM-DD');
+
     dispatch(
       restartJob({
         action: 'undo_service_after_complete_close',
@@ -264,18 +369,24 @@ export const ServiceDetails = () => {
         ticket_service_id: jobStartItem?.ticket_service_id,
         APIKEY: apiKey,
         emp_code: employeeCode,
+        amc_tkt_id: ticketDetails?.ticket_id,
+        amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
+        visit_date: formattedDate,
+        date: formattedDate,
       }),
     );
     setShowConfirmModal(false);
   };
 
   const handleExtendTicket = () => {
+    setIsTicketCompletedSuccess(false);
     dispatch(
       extendTicketAction({
         action: 'extend_ticket',
         APIKEY: apiKey,
-        emp_code: employeeCode,
-        emp_name: empName,
+        emp_id: effectiveEmpId,
+        emp_code: effectiveEmpCode,
+        emp_name: effectiveEmpName,
         amc_ticket: ticketType,
         amc_tkt_id: ticketDetails?.ticket_id,
         amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
@@ -284,8 +395,9 @@ export const ServiceDetails = () => {
     )
       .unwrap()
       .then(response => {
-        if (response.status === 'Failed') {
-          setErrorText(response.api_message);
+        setIsTicketCompletedSuccess(false);
+        if (response?.status === 'Failed' || response === 0 || response === '0') {
+          setErrorText(response?.api_message || 'Failed to extend job');
           setShowErrorModal(true);
         } else {
           setErrorText('JOB EXTENDED SUCCESSFULLY');
@@ -302,16 +414,45 @@ export const ServiceDetails = () => {
           setShowErrorModal(true);
         }
       })
-      .catch(error => setErrorText(error));
+      .catch(error => {
+        setIsTicketCompletedSuccess(false);
+        const msg = typeof error === 'string' ? error : error?.message || 'Failed to extend job';
+        setErrorText(msg);
+        setShowErrorModal(true);
+      });
   };
 
   const handleCompleteTicket = () => {
+    if (!allCompleted) {
+      if (!serviceImages?.data?.length) {
+        toast.show('Please attach at least one photo before completing the job.', {
+          type: 'danger',
+        });
+      } else {
+        toast.show('Please complete all services above before completing the job.', {
+          type: 'danger',
+        });
+      }
+      return;
+    }
+
+    console.log('========================================');
+    console.log('[COMPLETE JOB] Submitting with params:');
+    console.log('emp_id:', effectiveEmpId);
+    console.log('emp_code:', effectiveEmpCode);
+    console.log('emp_name:', effectiveEmpName);
+    console.log('amc_tkt_id:', ticketDetails?.ticket_id);
+    console.log('amc_ticket_ref_no:', ticketDetails?.ticket_ref_code);
+    console.log('visit_date:', visitDate);
+    console.log('========================================');
+
     dispatch(
       completeTicketAction({
         action: 'complete_ticket',
         APIKEY: apiKey,
-        emp_code: employeeCode,
-        emp_name: empName,
+        emp_id: effectiveEmpId,
+        emp_code: effectiveEmpCode,
+        emp_name: effectiveEmpName,
         amc_ticket: ticketType,
         amc_tkt_id: ticketDetails?.ticket_id,
         amc_ticket_ref_no: ticketDetails?.ticket_ref_code,
@@ -321,9 +462,11 @@ export const ServiceDetails = () => {
       .unwrap()
       .then(response => {
         if (response.status === 'Failed') {
-          setErrorText(response.api_message);
+          setIsTicketCompletedSuccess(false);
+          setErrorText(response.api_message || 'Failed to complete job');
           setShowErrorModal(true);
         } else {
+          setIsTicketCompletedSuccess(true);
           setErrorText('JOB COMPLETED SUCCESSFULLY');
           dispatch(
             getServiceSlots({
@@ -338,7 +481,12 @@ export const ServiceDetails = () => {
           setShowErrorModal(true);
         }
       })
-      .catch(error => setErrorText(error));
+      .catch(error => {
+        setIsTicketCompletedSuccess(false);
+        const msg = typeof error === 'string' ? error : error?.message || 'Failed to complete job';
+        setErrorText(msg);
+        setShowErrorModal(true);
+      });
   };
 
   const getIconName = (item: any) => {
@@ -385,19 +533,19 @@ export const ServiceDetails = () => {
 
   const getSuccessMessage = () => {
     if (jobStartItem?.ticket_service_status === serviceStatusTypes.pending) {
-      return 'JOB STARTED SUCCESSFULLY';
+      return 'SERVICE STARTED SUCCESSFULLY';
     }
     if (
       jobStartItem?.ticket_service_status === serviceStatusTypes.start &&
       completePressed
     ) {
-      return 'JOB COMPLETED SUCCESSFULLY';
+      return 'SERVICE COMPLETED SUCCESSFULLY';
     }
     if (jobStartItem?.ticket_service_status === serviceStatusTypes.completed) {
-      return 'JOB RESTARTED SUCCESSFULLY';
+      return 'SERVICE RESTARTED SUCCESSFULLY';
     }
     if (jobStartItem?.ticket_service_status === serviceStatusTypes.start)
-      return 'JOB STOPPED SUCCESSFULLY';
+      return 'SERVICE STOPPED SUCCESSFULLY';
     return '';
   };
 
@@ -410,16 +558,20 @@ export const ServiceDetails = () => {
     }
   };
 
-  const handleAudioRecorded = (path: string) => {
-    setAudioPath(path);
-  };
-
   const isEmergency = ticketDetails?.ticket_priority !== 'Normal';
 
   return (
     <View style={styles.container}>
       <Header isHome={false} isService />
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay
+        visible={
+          loading ||
+          startJobLoading ||
+          stopJobLoading ||
+          restartJobLoading ||
+          completeJobLoading
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <HeaderBar title="SERVICE DETAILS & JOB CARD" />
@@ -429,7 +581,9 @@ export const ServiceDetails = () => {
           <View style={styles.heroTopRow}>
             <View>
               <Text style={styles.woSubTitle}>WORK ORDER</Text>
-              <Text style={styles.woRefText}>#{ticketDetails?.ticket_ref_code || '---'}</Text>
+              <Text style={styles.woRefText}>
+                #{ticketDetails?.ticket_ref_code ? `${ticketDetails.ticket_ref_code}-${ticketDetails.ticket_id}` : '---'}
+              </Text>
             </View>
 
             <View style={{flexDirection: 'row', alignItems: 'center'}}>
@@ -511,9 +665,9 @@ export const ServiceDetails = () => {
                     </Text>
                   </View>
 
-                  {isSelected && (
+                  {isSelected && !isticketCompleted && !isBackdated(visitDate) && !isExtended && (
                     <View style={styles.serviceActionRow}>
-                      {isStarted && !isBackdated(visitDate) && !isExtended && (
+                      {isStarted && (
                         <TouchableOpacity
                           style={styles.stopActionBtn}
                           onPress={() => {
@@ -593,9 +747,17 @@ export const ServiceDetails = () => {
 
           <TextInput
             ref={inputRef}
-            placeholder="Type technician remarks here..."
+            editable={!isticketCompleted && !isBackdated(visitDate)}
+            placeholder={
+              isticketCompleted
+                ? 'Job completed - remarks locked'
+                : 'Type technician remarks here...'
+            }
             placeholderTextColor={colors.grey}
-            style={styles.remarksInput}
+            style={[
+              styles.remarksInput,
+              (isticketCompleted || isBackdated(visitDate)) && styles.disabledInput,
+            ]}
             multiline
             numberOfLines={4}
             value={description}
@@ -603,9 +765,13 @@ export const ServiceDetails = () => {
           />
 
           <AudioPlayerUI
-            track={serviceStatusData?.data[0]?.tech_audio_file}
-            isLocal={!serviceStatusData?.data[0]}
-            isAssets={false}
+            track={
+              audioPath ||
+              serviceStatusData?.data?.[0]?.tech_audio_file ||
+              serviceStatusData?.data?.[0]?.tech_audio
+            }
+            isLocal={!serviceStatusData?.data?.[0] && Boolean(audioPath?.startsWith('file://'))}
+            isAssets={isticketCompleted || isBackdated(visitDate)}
             onAudioRecorded={handleAudioRecorded}
           />
         </View>
@@ -616,8 +782,44 @@ export const ServiceDetails = () => {
           ticketDetails={ticketDetails}
         />
 
+        {/* Material Requisition Section Card */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <MaterialIcons name="inventory-2" size={20} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Material Requisition</Text>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            Request spare components, materials, or replacement parts for this work order.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setShowRequisitionModal(true)}
+            style={styles.requisitionBtn}>
+            <MaterialIcons name="add-shopping-cart" size={18} color={colors.white} style={{marginRight: 8}} />
+            <Text style={styles.requisitionBtnText}>REQUEST MATERIALS / PARTS</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Complete & Extend Ticket Actions */}
-        {!isBackdated(visitDate) && !isExtended && !isticketCompleted && (
+        {isticketCompleted ? (
+          <View style={styles.bottomButtonRow}>
+            <TouchableOpacity
+              disabled={true}
+              activeOpacity={1}
+              style={[styles.extendBtn, styles.disabledExtendBtn]}>
+              <MaterialIcons name="update" size={18} color={colors.grey} />
+              <Text style={[styles.extendBtnText, {color: colors.grey}]}>EXTEND</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              disabled={true}
+              activeOpacity={1}
+              style={[styles.completeBtn, styles.completedBannerBtn]}>
+              <MaterialIcons name="check-circle" size={18} color={colors.white} />
+              <Text style={styles.completeBtnText}>JOB COMPLETED</Text>
+            </TouchableOpacity>
+          </View>
+        ) : !isBackdated(visitDate) && !isExtended ? (
           <View style={styles.bottomButtonRow}>
             <TouchableOpacity
               activeOpacity={0.8}
@@ -628,7 +830,6 @@ export const ServiceDetails = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
-              disabled={!allCompleted}
               activeOpacity={0.85}
               style={[
                 styles.completeBtn,
@@ -639,7 +840,7 @@ export const ServiceDetails = () => {
               <Text style={styles.completeBtnText}>COMPLETE JOB</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
       {showCustomerModal && (
@@ -681,11 +882,24 @@ export const ServiceDetails = () => {
         <ErrorModal
           visible={showErrorModal}
           toggle={() => {
+            const shouldNavigate = isTicketCompletedSuccess;
             setShowErrorModal(false);
             setCompletePressed(false);
+            setIsTicketCompletedSuccess(false);
             setErrorText('');
+            if (shouldNavigate) {
+              navigate('ScheduleCalendar');
+            }
           }}
           errorText={errorText !== '' ? errorText : getSuccessMessage()}
+        />
+      )}
+      {showRequisitionModal && (
+        <MaterialRequisitionModal
+          visible={showRequisitionModal}
+          onClose={() => setShowRequisitionModal(false)}
+          ticketDetails={ticketDetails}
+          effectiveEmpId={effectiveEmpId}
         />
       )}
     </View>
@@ -957,6 +1171,38 @@ const styles = StyleSheet.create({
     fontSize: scaleFont(13),
     fontFamily: FontFamily.bold,
     marginLeft: 6,
+    letterSpacing: 0.5,
+  },
+  disabledInput: {
+    backgroundColor: '#F1F5F9',
+    color: colors.grey,
+  },
+  disabledExtendBtn: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F1F5F9',
+    opacity: 0.7,
+  },
+  completedBannerBtn: {
+    backgroundColor: '#15803D',
+    opacity: 0.85,
+  },
+  requisitionBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    height: 48,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  requisitionBtnText: {
+    color: colors.white,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
     letterSpacing: 0.5,
   },
 });

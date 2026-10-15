@@ -5,18 +5,22 @@ import {useEffect} from 'react';
 import {useAppSelector} from '../../store';
 import {screenHeight, screenWidth} from '../../utils/helper';
 export const SplashScreen = ({navigation}: any) => {
-  const {userLoggedIn} = useAppSelector(state => state.app);
+  const {userLoggedIn, employeeType} = useAppSelector(state => state.app);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (userLoggedIn) {
-        navigation.replace('HomeScreen');
+        if (employeeType?.toLowerCase().includes('janitor')) {
+          navigation.replace('JanitorDashboard');
+        } else {
+          navigation.replace('HomeScreen');
+        }
       } else {
         navigation.replace('LoginScreen');
       }
     }, 2000);
     return () => clearTimeout(timer);
-  }, [userLoggedIn, navigation]);
+  }, [userLoggedIn, employeeType, navigation]);
   return (
     <View style={styles.container}>
       <StatusBar

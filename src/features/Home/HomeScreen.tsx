@@ -12,12 +12,13 @@ import colors from '../../themes/colors';
 import {Header} from '../../core/components/header';
 import {FontFamily} from '../../themes/fonts';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
+import {useNavigation} from '@react-navigation/native';
 import {navigate} from '../../navigators';
 import {useAppDispatch, useAppSelector} from '../../store';
 import {getScheduleDates} from '../../store/reducers/getSchedules';
 import {getWorkHistory} from '../../store/reducers/workHistoryReducer';
 import {getProfileDetails} from '../../store/reducers/profileReducer';
-import {getRequisitionHistory} from '../../store/reducers/requisitionReducers/requistionHistory';
+import {getEmployeeWorkordersWithRequisitions} from '../../store/reducers/requisitionReducers/requistionHistory';
 import {
   getCustomerCareContact,
   resetCustomerCareStatus,
@@ -61,6 +62,7 @@ export const HomeScreen = () => {
     },
   ];
 
+  const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
   const toast = useToast();
   const {data, loading, status, error} = useAppSelector(
@@ -69,16 +71,14 @@ export const HomeScreen = () => {
   const {
     getScheduleLoading,
     workHistoryLoading,
-    reqHistoryLoading,
     profileLoading,
   } = useAppSelector(state => ({
     getScheduleLoading: state.schedules.getScheduleLoading,
     workHistoryLoading: state.history.workHistoryLoading,
-    reqHistoryLoading: state.requisitionHistory.reqHistoryLoading,
     profileLoading: state.profile.profileLoading,
   }));
 
-  const {apiKey, employeeCode, empName} = useAppSelector(state => state.app);
+  const {apiKey, employeeCode, empName, employeeId} = useAppSelector(state => state.app);
   const profileDetails = useAppSelector(state => state.profile.profileDetails);
 
   // Fetch logged-in user profile if name not cached yet
@@ -124,7 +124,7 @@ export const HomeScreen = () => {
   const handleItemPress = async (item: any) => {
     switch (item.route) {
       case 'Scanner':
-        navigate(item.route);
+        navigation.navigate('Scanner');
         break;
       case 'ScheduleCalendar':
         dispatch(
@@ -132,9 +132,10 @@ export const HomeScreen = () => {
             action: 'get_schedule_dates',
             APIKEY: apiKey,
             emp_code: employeeCode,
+            emp_id: employeeId,
           }),
         );
-        navigate(item.route);
+        navigation.navigate('ScheduleCalendar');
         break;
       case 'History':
         dispatch(
@@ -144,17 +145,21 @@ export const HomeScreen = () => {
             emp_code: employeeCode,
           }),
         );
-        navigate(item.route);
+        navigation.navigate('History');
         break;
       case 'RequisitionHistory':
         dispatch(
-          getRequisitionHistory({
-            action: 'view_requisition_history',
+          getEmployeeWorkordersWithRequisitions({
+            action: 'getEmployeeWorkordersWithRequisitions',
             APIKEY: apiKey,
+            employee_id: employeeId,
+            user_id: employeeId,
+            emp_id: employeeId,
             emp_code: employeeCode,
+            employee_code: employeeCode,
           }),
         );
-        navigate(item.route);
+        navigation.navigate('RequisitionHistory');
         break;
       case 'ProfileScreen':
         dispatch(
@@ -164,7 +169,7 @@ export const HomeScreen = () => {
             APIKEY: apiKey,
           }),
         );
-        navigate(item.route);
+        navigation.navigate('ProfileScreen');
         break;
       case '':
         dispatch(
@@ -184,7 +189,6 @@ export const HomeScreen = () => {
     loading ||
     getScheduleLoading ||
     workHistoryLoading ||
-    reqHistoryLoading ||
     profileLoading;
 
   return (

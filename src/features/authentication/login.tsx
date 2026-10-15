@@ -41,20 +41,33 @@ const LoginScreen = () => {
   const {data, error, status, loading} = useAppSelector(
     state => state.userLogin,
   );
+  const {employeeType} = useAppSelector(state => state.app);
   const toast = useToast();
 
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     if (status == 'success') {
-      navigate('HomeScreen');
+      const type = (
+        employeeType ||
+        data?.employee_type ||
+        data?.employee_type_name ||
+        data?.emp_type ||
+        ''
+      ).toLowerCase();
+
+      if (type.includes('janitor')) {
+        navigate('JanitorDashboard');
+      } else {
+        navigate('HomeScreen');
+      }
       dispatch(resetloginStatus());
     } else if (error) {
       setErrorText(error);
       setShowErrorModal(true);
       dispatch(resetError());
     }
-  }, [status, error]);
+  }, [status, error, employeeType, data]);
 
   const handleLogin = () => {
     let valid = true;

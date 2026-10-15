@@ -20,16 +20,67 @@ interface scheduleSlots {
 
 export const getScheduleSlots = createAsyncThunk(
   'schedules/getSlots',
-  async (params: scheduleSlots, {rejectWithValue}) => {
+  async (params: any, {rejectWithValue, getState}) => {
     try {
-      console.log(params);
-      const response = await getRequest(ApiUrl.getScheduleURL, params);
-      console.log(response);
-      if (response.data.status == 'Failed') {
-        throw new Error(response?.data?.api_message);
+      const state: any = getState();
+      const appState = state?.app || {};
+      const loginData = state?.userLogin?.data || {};
+      const profileData =
+        state?.profile?.profileDetails?.data ||
+        state?.profile?.profileDetails ||
+        {};
+
+      const empCode =
+        params?.emp_code ||
+        appState?.employeeCode ||
+        loginData?.employee_code ||
+        loginData?.emp_code ||
+        profileData?.employee_code ||
+        '';
+      const apiKey =
+        params?.APIKEY ||
+        appState?.apiKey ||
+        loginData?.APIKEY ||
+        profileData?.APIKEY ||
+        '';
+      const empId =
+        params?.emp_id ||
+        appState?.employeeId ||
+        loginData?.id ||
+        loginData?.employee_id ||
+        profileData?.id ||
+        '';
+
+      const isJanitor =
+        (appState?.employeeType || loginData?.employee_type || '').toLowerCase().includes('janitor') ||
+        empCode.toUpperCase().startsWith('CG-THC');
+
+      const targetUrl = isJanitor ? ApiUrl.janitorURL : ApiUrl.getScheduleURL;
+      const targetAction = isJanitor ? 'get_schedules_by_date' : 'get_date_slots';
+      const effectiveApiKey = isJanitor ? (apiKey || ApiUrl.janitorApiKey) : apiKey;
+      const targetDate = params?.visit_date || params?.date || '';
+
+      const queryParams: any = {
+        action: targetAction,
+        APIKEY: effectiveApiKey,
+        emp_code: empCode,
+        employee_code: empCode,
+        emp_id: empId,
+        employee_id: empId,
+        date: targetDate,
+        visit_date: targetDate,
+        ...params,
+      };
+
+      console.log('[getScheduleSlots] Request params:', queryParams, 'Target:', targetUrl);
+      const response = await getRequest(targetUrl, queryParams);
+      console.log('[getScheduleSlots] Response:', JSON.stringify(response?.data));
+      if (response?.data?.status === 'Failed') {
+        throw new Error(response?.data?.api_message || 'Failed to fetch slots');
       }
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
+      console.log('[getScheduleSlots] Error:', error);
       return rejectWithValue(error?.message || 'Something went wrong');
     }
   },

@@ -21,8 +21,6 @@ import {useAppDispatch} from '../../store';
 import {logout} from '../../store/reducers/appReducer';
 import {useState} from 'react';
 import {ConfirmModal} from './confirmModal';
-import Navigation from '../../navigators/navigation';
-import navigation from '../../navigators/navigation';
 interface HeaderProps {
   isProfile?: boolean;
   isHome?: boolean;

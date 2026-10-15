@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -17,11 +18,69 @@ import {getTeamDetails} from '../../store/reducers/getTeam';
 import {ImageView} from '../../core/components/imageView';
 import {useToast} from 'react-native-toast-notifications';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import {scaleFont} from '../../utils/helper';
+import {formatImageUrl, scaleFont} from '../../utils/helper';
 
 interface WorkDetailProps {
   route: any;
 }
+
+const PhotoThumbnail = ({
+  rawUrl,
+  label,
+  onPress,
+}: {
+  rawUrl?: string | null;
+  label: string;
+  onPress: (url: string) => void;
+}) => {
+  const formattedUrl = formatImageUrl(rawUrl);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  console.log(`[PhotoThumbnail - ${label}] rawUrl:`, rawUrl, '-> formattedUrl:', formattedUrl);
+
+  if (!formattedUrl) {
+    return null;
+  }
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      style={styles.photoBox}
+      onPress={() => onPress(formattedUrl)}>
+      {error ? (
+        <View style={styles.photoErrorBox}>
+          <MaterialIcons name="broken-image" size={22} color="#94A3B8" />
+          <Text style={styles.photoErrorText}>Image Error</Text>
+        </View>
+      ) : (
+        <>
+          <Image
+            source={{uri: formattedUrl}}
+            style={styles.photoThumb}
+            resizeMode="cover"
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            onError={e => {
+              console.log(`[PhotoThumbnail - ${label}] Image load ERROR for:`, formattedUrl, 'NativeEvent:', e.nativeEvent);
+              setLoading(false);
+              setError(true);
+            }}
+          />
+          {loading && (
+            <View style={styles.photoLoaderBox}>
+              <ActivityIndicator size="small" color={colors.white} />
+            </View>
+          )}
+        </>
+      )}
+      <View style={styles.zoomPill}>
+        <MaterialIcons name="zoom-in" size={14} color={colors.white} />
+        <Text style={styles.zoomPillText}>{label}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 export const WorkDetails = (props: WorkDetailProps) => {
   const {route} = props;
@@ -34,6 +93,9 @@ export const WorkDetails = (props: WorkDetailProps) => {
   const dispatch = useAppDispatch();
   const toast = useToast();
   const ticketDetails = data?.data[0];
+
+  const hasPhoto1 = Boolean(formatImageUrl(ticketDetails?.ticket_image));
+  const hasPhoto2 = Boolean(formatImageUrl(ticketDetails?.second_ticket_image));
 
   useEffect(() => {
     if (error) {
@@ -54,6 +116,30 @@ export const WorkDetails = (props: WorkDetailProps) => {
   };
 
   const isEmergency = ticketDetails?.ticket_priority === 'Emergency';
+
+  const renderBulletList = (text?: string) => {
+    if (!text) return null;
+
+    if (text.includes('*')) {
+      const items = text
+        .split('*')
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+
+      return (
+        <View style={styles.bulletContainer}>
+          {items.map((item, idx) => (
+            <View key={idx} style={styles.bulletRow}>
+              <View style={styles.bulletDot} />
+              <Text style={styles.bulletText}>{item}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+
+    return <Text style={styles.descriptionText}>{text}</Text>;
+  };
 
   const DetailGridRow = ({icon, label, value}: {icon: string; label: string; value?: string}) => (
     <View style={styles.detailTile}>
@@ -79,7 +165,7 @@ export const WorkDetails = (props: WorkDetailProps) => {
             <View style={styles.ticketRefBadge}>
               <MaterialIcons name="assignment" size={18} color={colors.white} />
               <Text style={styles.ticketRefText}>
-                WO #{ticketDetails?.ticket_ref_code || '---'}
+                WO #{ticketDetails?.ticket_ref_code ? `${ticketDetails.ticket_ref_code}-${ticketDetails.ticket_id}` : '---'}
               </Text>
             </View>
 
@@ -105,45 +191,24 @@ export const WorkDetails = (props: WorkDetailProps) => {
           </View>
 
           {/* Ticket Photos Preview Section */}
-          {(ticketDetails?.ticket_image || ticketDetails?.second_ticket_image) ? (
+          {(hasPhoto1 || hasPhoto2) ? (
             <View style={styles.photosRow}>
-              {ticketDetails?.ticket_image ? (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.photoBox}
-                  onPress={() => {
-                    setShowImageView(true);
-                    setImageUrl(ticketDetails?.ticket_image);
-                  }}>
-                  <Image
-                    source={{uri: ticketDetails?.ticket_image}}
-                    style={styles.photoThumb}
-                  />
-                  <View style={styles.zoomPill}>
-                    <MaterialIcons name="zoom-in" size={14} color={colors.white} />
-                    <Text style={styles.zoomPillText}>Photo 1</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-
-              {ticketDetails?.second_ticket_image ? (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={styles.photoBox}
-                  onPress={() => {
-                    setShowImageView(true);
-                    setImageUrl(ticketDetails?.second_ticket_image);
-                  }}>
-                  <Image
-                    source={{uri: ticketDetails?.second_ticket_image}}
-                    style={styles.photoThumb}
-                  />
-                  <View style={styles.zoomPill}>
-                    <MaterialIcons name="zoom-in" size={14} color={colors.white} />
-                    <Text style={styles.zoomPillText}>Photo 2</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
+              <PhotoThumbnail
+                rawUrl={ticketDetails?.ticket_image}
+                label="Photo 1"
+                onPress={url => {
+                  setImageUrl(url);
+                  setShowImageView(true);
+                }}
+              />
+              <PhotoThumbnail
+                rawUrl={ticketDetails?.second_ticket_image}
+                label="Photo 2"
+                onPress={url => {
+                  setImageUrl(url);
+                  setShowImageView(true);
+                }}
+              />
             </View>
           ) : null}
         </View>
@@ -220,20 +285,16 @@ export const WorkDetails = (props: WorkDetailProps) => {
             </View>
 
             {ticketDetails?.complaints_description ? (
-              <View style={{marginBottom: 10}}>
+              <View style={{marginBottom: 12}}>
                 <Text style={styles.detailLabel}>COMPLAINT DESCRIPTION</Text>
-                <Text style={styles.descriptionText}>
-                  {ticketDetails?.complaints_description}
-                </Text>
+                {renderBulletList(ticketDetails?.complaints_description)}
               </View>
             ) : null}
 
             {ticketDetails?.additional_info ? (
               <View>
                 <Text style={styles.detailLabel}>ADDITIONAL INFO</Text>
-                <Text style={styles.descriptionText}>
-                  {ticketDetails?.additional_info}
-                </Text>
+                {renderBulletList(ticketDetails?.additional_info)}
               </View>
             ) : null}
           </View>
@@ -315,18 +376,39 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   photoBox: {
-    width: 100,
-    height: 70,
+    width: 105,
+    height: 75,
     borderRadius: 12,
     overflow: 'hidden',
     marginRight: 10,
     position: 'relative',
     backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   photoThumb: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+  },
+  photoLoaderBox: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+  },
+  photoErrorBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    padding: 4,
+  },
+  photoErrorText: {
+    color: '#94A3B8',
+    fontSize: scaleFont(8),
+    fontFamily: FontFamily.bold,
+    marginTop: 2,
+    textAlign: 'center',
   },
   zoomPill: {
     position: 'absolute',
@@ -397,6 +479,30 @@ const styles = StyleSheet.create({
     color: colors.header,
     lineHeight: 20,
     marginTop: 4,
+  },
+  bulletContainer: {
+    marginTop: 4,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+    paddingRight: 8,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginTop: 7,
+    marginRight: 8,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.medium,
+    color: colors.header,
+    lineHeight: 20,
   },
   teamButton: {
     backgroundColor: colors.primary,

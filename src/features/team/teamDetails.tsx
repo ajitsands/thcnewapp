@@ -14,7 +14,7 @@ import {navigate} from '../../navigators';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {useAppDispatch, useAppSelector} from '../../store';
 import LoadingOverlay from '../../core/components/loadingOverlay';
-import {markPresent} from '../../store/reducers/markPresentReducer';
+import {markPresent, resetError} from '../../store/reducers/markPresentReducer';
 import {useToast} from 'react-native-toast-notifications';
 import moment from 'moment';
 import {
@@ -32,14 +32,16 @@ export const TeamDetails = (props: TeamDetailProps) => {
   const {apiKey, employeeCode} = useAppSelector(state => state.app);
   const {ticketType} = useAppSelector(state => state.tickets);
   const tickets = useAppSelector(state => state.tickets.data);
-  const {status} = useAppSelector(state => state.markPresent);
+  const {status, error, loading: markPresentLoading} = useAppSelector(
+    state => state.markPresent,
+  );
   const dispatch = useAppDispatch();
   const toast = useToast();
 
   const {route} = props;
   const visitDate = route?.params?.visitDate;
-  const teamDetails = data?.data || [];
-  const ticketDetails = tickets?.data[0];
+  const teamDetails = (data as any)?.data || [];
+  const ticketDetails = (tickets as any)?.data?.[0];
 
   useEffect(() => {
     if (status === 'success') {
@@ -52,28 +54,54 @@ export const TeamDetails = (props: TeamDetailProps) => {
           amc_tkt_id: ticketDetails?.ticket_id,
         }),
       );
+    } else if (status === 'failed' && error) {
+      toast.show(error, {style: styles.toast});
+      dispatch(resetError());
     }
-  }, [status]);
+  }, [status, error]);
 
   const isBackdated = (selectedDate: string) => {
     return moment(selectedDate).isBefore(moment(), 'day');
   };
 
+  // Identify if logged-in user is a Team Leader in this team
+  const loggedInMember = Array.isArray(teamDetails)
+    ? teamDetails.find(
+        (m: any) => m?.employee_code?.toString() === employeeCode?.toString(),
+      )
+    : null;
+  const isUserLeader = loggedInMember?.is_leader === 'Yes';
+
   const handleAttendanceMarking = (item: any) => {
-    if (item?.is_leader === 'Yes' && !isBackdated(visitDate)) {
-      if (item?.is_attend === 'No') {
-        dispatch(
-          markPresent({
-            action: 'mark_emp_attendance',
-            ticket_team_ids: item?.ticket_team_ids,
-            amc_ticket: ticketType,
-            APIKEY: apiKey,
-            emp_code: employeeCode,
-          }),
-        );
-      }
+    if (isBackdated(visitDate)) {
+      toast.show('Cannot mark attendance for past dates', {
+        style: styles.toast,
+      });
+      return;
+    }
+
+    if (item?.is_attend === 'Yes') {
+      toast.show('Attendance is already marked as present', {
+        style: styles.toast,
+      });
+      return;
+    }
+
+    const isSelf = item?.employee_code?.toString() === employeeCode?.toString();
+    const canMark = isUserLeader || isSelf;
+
+    if (canMark) {
+      dispatch(
+        markPresent({
+          action: 'mark_emp_attendance',
+          ticket_team_ids: item?.ticket_team_ids,
+          amc_ticket: ticketType,
+          APIKEY: apiKey,
+          emp_code: employeeCode,
+        }),
+      );
     } else {
-      toast.show(`You don't have privilege to mark attendance`, {
+      toast.show(`You don't have privilege to mark attendance for other members`, {
         style: styles.toast,
       });
     }
@@ -143,7 +171,7 @@ export const TeamDetails = (props: TeamDetailProps) => {
   return (
     <View style={styles.container}>
       <Header isHome={false} />
-      <LoadingOverlay visible={loading} />
+      <LoadingOverlay visible={loading || markPresentLoading} />
 
       <View style={styles.mainWrapper}>
         <FlatList

@@ -16,23 +16,25 @@ interface ticketDetails {
   emp_code: string;
   visit_date: string;
   amc_ticket_ref_no: string;
+  slot_number?: string | number;
+  slot_id?: string | number;
 }
 
 export const getTicketDetails = createAsyncThunk(
   'tickets/getTicketDetails',
-  async (params: ticketDetails, {rejectWithValue}) => {
+  async (params: ticketDetails | any, {rejectWithValue}) => {
     try {
-      console.log(params);
+      console.log('[getTicketDetails] Request params:', params);
       const response = await getRequest(ApiUrl.getScheduleURL, params);
-      console.log(response);
-      if (response.data.status == 'Failed') {
-        throw new Error(response?.data?.api_message);
+      console.log('[getTicketDetails] Response:', response?.data);
+      if (response?.data?.status == 'Failed' || response?.data?.status == 'failed') {
+        throw new Error(response?.data?.api_message || 'Failed to fetch ticket details');
       } else {
         navigate('WorkDetails', {date: params.visit_date});
       }
 
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       return rejectWithValue(error?.message || 'Something went wrong');
     }
   },

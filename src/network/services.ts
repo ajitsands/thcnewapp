@@ -5,49 +5,47 @@ import NetInfo from '@react-native-community/netinfo';
 
 const API = axios.create({
   baseURL: ApiUrl.devURL,
-  timeout: 10000,
+  timeout: 35000,
   headers: {
     accept: 'application/json',
     'Content-Type': 'multipart/form-data',
   },
-  validateStatus: status => status < 500,
+  validateStatus: status => status < 600,
 });
-API.interceptors.request.use(async request => {
-  const connection = await NetInfo.fetch();
 
-  if (!connection.isConnected || !connection.isInternetReachable) {
-    return Promise.reject(new Error('No Internet connection'));
+API.interceptors.request.use(async request => {
+  try {
+    const connection = await NetInfo.fetch();
+    if (connection.isConnected === false) {
+      return Promise.reject(new Error('No Internet connection'));
+    }
+  } catch (e) {
+    // Continue if NetInfo check fails
   }
 
-  console.log('Starting Request', request);
+  console.log('Starting Request:', request?.url, request?.params || request?.data);
   return request;
 });
 
-// 🚀 Response logging
 API.interceptors.response.use(
   response => {
+    console.log('Response:', response?.config?.url, response?.status, response?.data);
     return response;
   },
   error => {
+    console.warn('API Error:', error?.message);
     return Promise.reject(error);
   },
 );
-// Logging interceptor
-API.interceptors.request.use(request => {
-  console.log('Starting Request', request);
-  return request;
-});
-API.interceptors.response.use(response => {
-  console.log('Response:', response);
-  return response;
-});
+
 export const postRequest = async (url: string, data: {}, token?: string) => {
-  if (token) {
+  if (token && typeof token === 'string') {
     API.defaults.headers.Authorization = `Bearer ${token}`;
   }
   const res = await API.post(url, data);
   return res;
 };
+
 export const getRequest = async (url: string, queries = {}) => {
   const response = await API.get(url, {
     params: queries,
@@ -55,3 +53,4 @@ export const getRequest = async (url: string, queries = {}) => {
 
   return response;
 };
+

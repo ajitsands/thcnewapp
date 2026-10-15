@@ -12,7 +12,7 @@ import colors from '../../../themes/colors';
 import {Header} from '../../../core/components/header';
 import {HeaderBar} from '../../../core/components/headerBar';
 import {FontFamily} from '../../../themes/fonts';
-import {scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
+import {formatImageUrl, scaleFont, screenHeight, screenWidth} from '../../../utils/helper';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {
   getAssetDetails,
@@ -170,7 +170,7 @@ export const AssetDetails = (props: AssetProps) => {
               </View>
 
               {/* Attachment Image Preview Card */}
-              {assetDetails?.asset_attachment ? (
+              {formatImageUrl(assetDetails?.asset_attachment) ? (
                 <View style={styles.attachmentCard}>
                   <Text style={styles.sectionHeaderTitle}>ASSET PHOTO</Text>
                   <TouchableOpacity
@@ -178,7 +178,7 @@ export const AssetDetails = (props: AssetProps) => {
                     style={styles.photoContainer}
                     onPress={() => setShowImageModal(true)}>
                     <Image
-                      source={{uri: assetDetails?.asset_attachment}}
+                      source={{uri: formatImageUrl(assetDetails?.asset_attachment)!}}
                       style={styles.photoImage}
                     />
                     <View style={styles.zoomBadge}>

@@ -14,74 +14,97 @@ import {useToast} from 'react-native-toast-notifications';
 import colors from '../../../themes/colors';
 import {FontFamily} from '../../../themes/fonts';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import SvgPause from '../../../assets/svg/svgPause.svg';
-import SvgPlay from '../../../assets/svg/svgPlaybutton.svg';
-import RNFS from 'react-native-fs';
-import {scaleFont} from '../../../utils/helper';
-const audioRecorderPlayer = new AudioRecorderPlayer();
+import {formatImageUrl, scaleFont} from '../../../utils/helper';
 
-const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
+interface AudioPlayerProps {
+  track?: string;
+  isLocal?: boolean;
+  isAssets?: boolean;
+  onAudioRecorded?: (path: string) => void;
+}
+
+const AudioPlayerUI = ({
+  track,
+  isLocal,
+  isAssets,
+  onAudioRecorded,
+}: AudioPlayerProps) => {
   const toast = useToast();
+  const audioRecorderPlayerRef = useRef<AudioRecorderPlayer | null>(null);
+  if (!audioRecorderPlayerRef.current) {
+    audioRecorderPlayerRef.current = new AudioRecorderPlayer();
+  }
+  const audioRecorderPlayer = audioRecorderPlayerRef.current;
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedPath, setRecordedPath] = useState('');
-  const [hasMicPermission, setHasMicPermission] = useState(false);
 
   useEffect(() => {
-    // Clear any old recording when a new track is loaded from parent
-    setRecordedPath('');
+    // Clear playback when a new track is loaded from parent
     setIsPlaying(false);
     setPosition(0);
     setDuration(0);
   }, [track]);
 
-  const requestPermission = async () => {
+  const requestPermission = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
-      const result = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        {
-          title: 'Microphone Permission',
-          message: 'This app needs access to your microphone to record audio.',
-          buttonPositive: 'OK',
-        },
-      );
-      if (result === PermissionsAndroid.RESULTS.GRANTED) {
-        setHasMicPermission(true);
-        return true;
+      try {
+        const grants = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ]);
+        return (
+          grants['android.permission.RECORD_AUDIO'] ===
+          PermissionsAndroid.RESULTS.GRANTED
+        );
+      } catch (err) {
+        console.warn('Microphone permission request error:', err);
+        return false;
       }
-      return false;
     }
-    setHasMicPermission(true);
     return true;
   };
 
   const onStartRecord = async () => {
-    if (!hasMicPermission) {
-      await requestPermission();
-      return; // ✅ stop here, user will press again to start
-    }
-
     try {
-      const path = Platform.select({
-        ios: 'recorded.m4a',
-        android: undefined, // default path
-      });
-      if (isRecording) {
-        toast.show('Already recording in progress.', {type: 'warning'});
+      const granted = await requestPermission();
+      if (!granted) {
+        toast.show('Microphone permission required to record audio.', {
+          type: 'warning',
+        });
         return;
       }
-      await audioRecorderPlayer.startRecorder(path);
-      setIsRecording(true);
-      console.log('------------------------------------------', path);
-      audioRecorderPlayer.addRecordBackListener(e => {
-        setRecordingTime(e.currentPosition / 1000);
-        return;
+
+      if (isPlaying) {
+        try {
+          await audioRecorderPlayer.stopPlayer();
+          audioRecorderPlayer.removePlayBackListener();
+        } catch (_) {}
+        setIsPlaying(false);
+      }
+
+      const path = Platform.select({
+        ios: 'recorded.m4a',
+        android: undefined,
       });
-    } catch (err) {
+
+      const uri = await audioRecorderPlayer.startRecorder(path);
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      audioRecorderPlayer.addRecordBackListener((e: any) => {
+        if (e && e.currentPosition !== undefined) {
+          setRecordingTime(Math.floor(e.currentPosition / 1000));
+        }
+      });
+      console.log('[AudioPlayerUI] Started recording to:', uri);
+    } catch (err: any) {
       console.warn('Recording error:', err);
+      setIsRecording(false);
+      toast.show('Unable to start recording', {type: 'danger'});
     }
   };
 
@@ -91,102 +114,134 @@ const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
       audioRecorderPlayer.removeRecordBackListener();
       setIsRecording(false);
       setRecordingTime(0);
-      setRecordedPath(result);
-      if (onAudioRecorded) {
-        onAudioRecorded(result);
+
+      if (result) {
+        console.log('[AudioPlayerUI] Recording saved at:', result);
+        setRecordedPath(result);
+        if (onAudioRecorded) {
+          onAudioRecorded(result);
+        }
       }
     } catch (err) {
       console.warn('Stop recording error:', err);
-    }
-  };
-  const checkRemoteFileExists = async (url: string): Promise<boolean> => {
-    try {
-      const response = await fetch(url, {method: 'HEAD'});
-      return response.ok;
-    } catch (error) {
-      toast.show('Audio file not found ', {type: 'danger'});
-      return false;
+      setIsRecording(false);
     }
   };
 
   const play = async () => {
     try {
-      const path = recordedPath || track;
-      console.log('------------------------------------------', path);
-      let exists = false;
-
-      // ✅ Check for local file
-      if (path.startsWith('file://') || path.startsWith('/')) {
-        exists = await RNFS.exists(path);
-      } else {
-        // ✅ Check for remote URL
-        exists = await checkRemoteFileExists(path);
-      }
-
-      if (!exists) {
-        toast.show('Audio file not found ', {type: 'danger'});
+      let path = recordedPath || track;
+      if (!path || typeof path !== 'string' || path.trim() === '') {
+        toast.show('No audio file found to play.', {type: 'warning'});
         return;
       }
+
+      if (!path.startsWith('file://') && !path.startsWith('/')) {
+        const formatted = formatImageUrl(path);
+        if (formatted) {
+          path = formatted;
+        }
+      }
+
+      console.log('[AudioPlayerUI] Starting playback for:', path);
+
+      try {
+        await audioRecorderPlayer.stopPlayer();
+        audioRecorderPlayer.removePlayBackListener();
+      } catch (_) {}
 
       const msg = await audioRecorderPlayer.startPlayer(path);
-      console.log(msg);
       if (!msg) {
-        toast.show('Failed to start audio player', {type: 'danger'});
+        toast.show('Unable to start audio playback.', {type: 'danger'});
         return;
       }
-      audioRecorderPlayer.addPlayBackListener(e => {
-        setPosition(e.currentPosition / 1000);
-        setDuration(e.duration / 1000);
 
-        if (e.currentPosition >= e.duration) {
-          stop();
-        }
-        return;
-      });
       setIsPlaying(true);
-    } catch (e) {
-      toast.show('Unable to play the file', {type: 'danger'});
-      console.log(e);
+
+      audioRecorderPlayer.addPlayBackListener((e: any) => {
+        if (e) {
+          const currentPosSec = Math.floor((e.currentPosition || 0) / 1000);
+          const durationSec = Math.floor((e.duration || 0) / 1000);
+          setPosition(currentPosSec);
+          if (durationSec > 0) {
+            setDuration(durationSec);
+          }
+
+          if (e.currentPosition >= e.duration && e.duration > 0) {
+            stop();
+          }
+        }
+      });
+    } catch (e: any) {
+      console.log('Audio playback error:', e);
+      toast.show('Unable to play the audio file.', {type: 'danger'});
+      setIsPlaying(false);
     }
   };
 
   const pause = async () => {
-    await audioRecorderPlayer.pausePlayer();
-    setIsPlaying(false);
+    try {
+      await audioRecorderPlayer.pausePlayer();
+      setIsPlaying(false);
+    } catch (e) {
+      console.warn('Pause error:', e);
+    }
   };
 
   const stop = async () => {
-    await audioRecorderPlayer.stopPlayer();
-    audioRecorderPlayer.removePlayBackListener();
-    setIsPlaying(false);
-    setPosition(0);
+    try {
+      await audioRecorderPlayer.stopPlayer();
+      audioRecorderPlayer.removePlayBackListener();
+    } catch (e) {
+      console.warn('Stop error:', e);
+    } finally {
+      setIsPlaying(false);
+      setPosition(0);
+    }
   };
 
   useEffect(() => {
     return () => {
-      audioRecorderPlayer.stopPlayer();
-      audioRecorderPlayer.removePlayBackListener();
+      try {
+        audioRecorderPlayer.stopPlayer();
+        audioRecorderPlayer.removePlayBackListener();
+        audioRecorderPlayer.stopRecorder();
+        audioRecorderPlayer.removeRecordBackListener();
+      } catch (_) {}
     };
   }, []);
 
-  const getFormattedTime = (sec: any) => {
-    const minutes = Math.floor(sec / 60);
-    const seconds = Math.floor(sec % 60);
+  const getFormattedTime = (sec: number) => {
+    const safeSec = Math.max(0, Math.floor(sec || 0));
+    const minutes = Math.floor(safeSec / 60);
+    const seconds = Math.floor(safeSec % 60);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  const hasAudioTrack = Boolean(
+    recordedPath ||
+      (track &&
+        typeof track === 'string' &&
+        track.trim() !== '' &&
+        track !== 'null' &&
+        track !== 'undefined' &&
+        track !== 'NA'),
+  );
+
   return (
-    <>
-      {(recordedPath ||(!isLocal && track)) && !isRecording &&(
-        <View style={styles.container}>
+    <View style={styles.wrapper}>
+      {/* Audio Player Bar */}
+      {hasAudioTrack && !isRecording && (
+        <View style={styles.playerContainer}>
           <TouchableOpacity
+            activeOpacity={0.8}
             onPress={isPlaying ? pause : play}
-            style={styles.play}>
-            {isPlaying ? (
-              <SvgPause height={10} width={10} />
-            ) : (
-              <SvgPlay height={12} width={12} />
-            )}
+            style={styles.playBtn}>
+            <MaterialIcons
+              name={isPlaying ? 'pause' : 'play-arrow'}
+              size={16}
+              color={colors.white}
+            />
           </TouchableOpacity>
 
           <Text style={styles.timeText}>{getFormattedTime(position)}</Text>
@@ -194,92 +249,151 @@ const AudioPlayerUI = ({track, isLocal, isAssets, onAudioRecorded}) => {
           <Slider
             style={styles.slider}
             minimumValue={0}
-            maximumValue={duration}
+            maximumValue={duration > 0 ? duration : 1}
             value={position}
             disabled={true}
-            minimumTrackTintColor="#4a90e2"
-            maximumTrackTintColor="#ccc"
-            thumbTintColor={colors.grey}
+            minimumTrackTintColor={colors.primary}
+            maximumTrackTintColor="#CBD5E1"
+            thumbTintColor={colors.primary}
           />
 
           <Text style={styles.timeText}>{getFormattedTime(duration)}</Text>
         </View>
       )}
+
+      {/* Mic Record Button & Indicator */}
       {!isAssets && (
         <View
-          style={{
-            padding: 2,
-            borderRadius: 30,
-            borderWidth: 1,
-            margin: 5,
-            borderColor: isRecording ? colors.red : colors.green,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-          <Text
-            style={{
-              fontSize: scaleFont(14),
-              fontFamily: FontFamily.medium,
-              color: isRecording ? colors.green : colors.black,
-              marginLeft: '20%',
-            }}>
-            {isRecording
-              ? getFormattedTime(recordingTime)
-              : 'PRESS AND HOLD TO RECORD'}
-          </Text>
+          style={[
+            styles.recordContainer,
+            isRecording && styles.recordingActiveContainer,
+          ]}>
+          <View style={styles.recordStatusRow}>
+            {isRecording && <View style={styles.pulsingDot} />}
+            <Text
+              style={[
+                styles.recordPromptText,
+                isRecording && styles.recordingActiveText,
+              ]}>
+              {isRecording
+                ? `Recording: ${getFormattedTime(recordingTime)}`
+                : recordedPath
+                ? 'HOLD TO RE-RECORD AUDIO'
+                : 'PRESS AND HOLD TO RECORD'}
+            </Text>
+          </View>
 
           <Pressable
-            onPressIn={() => onStartRecord()}
-            onPressOut={() => onStopRecord()}
-            style={{
-              backgroundColor: isRecording ? colors.red : colors.green,
-              height: 40,
-              width: 40,
-              borderRadius: 20,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}>
-            <MaterialIcons name="mic" size={20} color={colors.white} />
+            onPressIn={onStartRecord}
+            onPressOut={onStopRecord}
+            style={({pressed}) => [
+              styles.micButton,
+              isRecording && styles.micButtonRecording,
+              pressed && styles.micButtonPressed,
+            ]}>
+            <MaterialIcons
+              name={isRecording ? 'graphic-eq' : 'mic'}
+              size={20}
+              color={colors.white}
+            />
           </Pressable>
         </View>
       )}
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: 5,
-    padding: 3,
+  wrapper: {
+    marginVertical: 6,
+  },
+  playerContainer: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F9FD',
-    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#DCECFB',
-  },
-  icon: {
-    fontSize: scaleFont(20),
-    marginHorizontal: 10,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
   },
   slider: {
     flex: 1,
-    height: 40,
+    height: 36,
   },
   timeText: {
-    fontSize: scaleFont(12),
-    width: 40,
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    width: 38,
     textAlign: 'center',
   },
-  play: {
-    height: 20,
-    width: 20,
-    borderRadius: 10,
-    backgroundColor: colors.black,
+  playBtn: {
+    height: 28,
+    width: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 10,
+    marginRight: 6,
+  },
+  recordContainer: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: colors.white,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  recordingActiveContainer: {
+    borderColor: colors.red,
+    backgroundColor: '#FEF2F2',
+  },
+  recordStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  pulsingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.red,
+    marginRight: 8,
+  },
+  recordPromptText: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.bold,
+    color: colors.grey,
+    letterSpacing: 0.3,
+  },
+  recordingActiveText: {
+    color: colors.red,
+  },
+  micButton: {
+    backgroundColor: colors.primary,
+    height: 38,
+    width: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: colors.primary,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  micButtonRecording: {
+    backgroundColor: colors.red,
+    shadowColor: colors.red,
+  },
+  micButtonPressed: {
+    opacity: 0.85,
+    transform: [{scale: 0.96}],
   },
 });
 

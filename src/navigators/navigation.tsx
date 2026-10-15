@@ -17,6 +17,9 @@ import {WorkDetails} from '../features/jobDetails/jobDetails';
 import {TeamDetails} from '../features/team/teamDetails';
 import {ServiceDetails} from '../features/jobDetails/serviceDetails';
 import {RequisitionView} from '../features/Requisition/screens/requisitionScreen';
+import {JanitorDashboard} from '../features/janitor/JanitorDashboard';
+import {JanitorQRScannerScreen} from '../features/scanner/screens/JanitorQRScannerScreen';
+import {JanitorChecklistScreen} from '../features/checklist/JanitorChecklistScreen';
 import {NoInternetOverlay} from '../core/components/NoInternetOverlay';
 
 const Navigation = () => {
@@ -38,6 +41,11 @@ const Navigation = () => {
         <Stack.Screen
           component={HomeScreen}
           name={'HomeScreen'}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          component={JanitorDashboard}
+          name={'JanitorDashboard'}
           options={{headerShown: false}}
         />
         <Stack.Screen
@@ -93,6 +101,16 @@ const Navigation = () => {
         <Stack.Screen
           component={RequisitionView}
           name={'RequisitionScreen'}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          component={JanitorQRScannerScreen}
+          name={'JanitorQRScanner'}
+          options={{headerShown: false}}
+        />
+        <Stack.Screen
+          component={JanitorChecklistScreen}
+          name={'JanitorChecklist'}
           options={{headerShown: false}}
         />
       </Stack.Navigator>

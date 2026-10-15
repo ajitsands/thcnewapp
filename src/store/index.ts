@@ -39,6 +39,8 @@ import productTypeDetails from './reducers/requisitionReducers/getProductType';
 import itemDetails from './reducers/requisitionReducers/itemDetailsReducer';
 import addRequisitionItemDetails from './reducers/requisitionReducers/addRequisitionItemReducer';
 import deleteItemDetails from './reducers/requisitionReducers/deleteRequisitionItemreducer';
+import bookRequisitionReducer from './reducers/requisitionReducers/bookRequisitionReducer';
+import janitorExecutionReducer from './reducers/janitorExecutionReducer';
 const middleware: any = [];
 
 const rootReducer = combineReducers({
@@ -68,6 +70,8 @@ const rootReducer = combineReducers({
   itemDetails: itemDetails,
   addRequisitionItemDetails: addRequisitionItemDetails,
   deleteRequisition: deleteItemDetails,
+  bookRequisition: bookRequisitionReducer,
+  janitorExecution: janitorExecutionReducer,
 });
 const config = getPersistConfig({
   storage: AsyncStorage,

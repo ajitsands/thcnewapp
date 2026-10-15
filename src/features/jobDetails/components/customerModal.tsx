@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import colors from '../../../themes/colors';
 import Modal from 'react-native-modal';
-import {scaleFont} from '../../../utils/helper';
+import {formatImageUrl, scaleFont} from '../../../utils/helper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {FontFamily} from '../../../themes/fonts';
 import {ImageView} from '../../../core/components/imageView';
@@ -24,6 +24,9 @@ export const CustomerModal = (props: ModalProps) => {
   const {visible, toggle, details} = props;
   const [showImageView, setShowImageView] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
+
+  const photo1 = formatImageUrl(details?.ticket_image);
+  const photo2 = formatImageUrl(details?.second_ticket_image);
 
   const customerFields = [
     {
@@ -76,7 +79,7 @@ export const CustomerModal = (props: ModalProps) => {
               <View>
                 <Text style={styles.headerTitle}>Customer & Work Order Details</Text>
                 <Text style={styles.headerSubtitle}>
-                  Work Order #{details?.ticket_ref_code || '---'}
+                  Work Order #{details?.ticket_ref_code ? `${details.ticket_ref_code}-${details.ticket_id}` : '---'}
                 </Text>
               </View>
             </View>
@@ -94,41 +97,56 @@ export const CustomerModal = (props: ModalProps) => {
                   <MaterialIcons name={item.icon} size={18} color={colors.primary} style={styles.fieldIcon} />
                   <View style={styles.fieldContent}>
                     <Text style={styles.fieldLabel}>{item.title}</Text>
-                    <Text style={styles.fieldValue}>{item.value}</Text>
+                    {typeof item.value === 'string' && item.value.includes('*') ? (
+                      <View style={{marginTop: 4}}>
+                        {item.value
+                          .split('*')
+                          .map(p => p.trim())
+                          .filter(p => p.length > 0)
+                          .map((bullet, bIdx) => (
+                            <View key={bIdx} style={{flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4}}>
+                              <View style={{width: 5, height: 5, borderRadius: 2.5, backgroundColor: colors.primary, marginTop: 6, marginRight: 6}} />
+                              <Text style={[styles.fieldValue, {flex: 1, lineHeight: 18}]}>{bullet}</Text>
+                            </View>
+                          ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.fieldValue}>{item.value}</Text>
+                    )}
                   </View>
                 </View>
               ))}
             </View>
 
             {/* Ticket Images Section */}
-            {(details?.ticket_image || details?.second_ticket_image) && (
+            {(photo1 || photo2) && (
               <View style={styles.imagesSection}>
                 <Text style={styles.imagesSectionTitle}>Attached Photos</Text>
                 <View style={styles.imagesRow}>
-                  {details?.ticket_image ? (
+                  {photo1 ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
                       style={styles.imageWrapper}
                       onPress={() => {
                         setShowImageView(true);
-                        setImageUrl(details?.ticket_image);
+                        setImageUrl(photo1);
                       }}>
-                      <Image source={{uri: details?.ticket_image}} style={styles.thumbnailImage} />
+                      <Image source={{uri: photo1}} style={styles.thumbnailImage} />
                       <View style={styles.zoomOverlay}>
                         <MaterialIcons name="zoom-in" size={16} color={colors.white} />
                       </View>
                     </TouchableOpacity>
                   ) : null}
 
-                  {details?.second_ticket_image ? (
+                  {photo2 ? (
                     <TouchableOpacity
                       activeOpacity={0.85}
                       style={styles.imageWrapper}
                       onPress={() => {
                         setShowImageView(true);
-                        setImageUrl(details?.second_ticket_image);
+                        setImageUrl(photo2);
                       }}>
-                      <Image source={{uri: details?.second_ticket_image}} style={styles.thumbnailImage} />
+                      <Image source={{uri: photo2}} style={styles.thumbnailImage} />
                       <View style={styles.zoomOverlay}>
                         <MaterialIcons name="zoom-in" size={16} color={colors.white} />
                       </View>
