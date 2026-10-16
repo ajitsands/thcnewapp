@@ -145,6 +145,9 @@ export const getChecklistItems = createAsyncThunk(
         checklist_id: params?.checklist_id,
         assignment_id: params?.assignment_id,
       };
+      if (params?.date) {
+        queryParams.date = params.date;
+      }
 
       console.log('[getChecklistItems] Fetching checklist items:', queryParams);
       const response = await getRequest(ApiUrl.janitorURL, queryParams);

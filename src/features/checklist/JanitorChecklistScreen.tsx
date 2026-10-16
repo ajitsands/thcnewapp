@@ -88,6 +88,11 @@ export const JanitorChecklistScreen = () => {
     parsedSlots = [];
   }
 
+  // Helper to extract a consistent slot key
+  const getSlotKey = (s: any, idx: number) => {
+    return String(s?.name || s?.slot_name || s?.slot_time || `Slot ${idx + 1}`).trim();
+  };
+
   // Active Selected Slot
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
   const activeSlot = parsedSlots[selectedSlotIndex] || {
@@ -97,58 +102,112 @@ export const JanitorChecklistScreen = () => {
     has_rule: 1,
   };
 
+  const activeSlotKey = getSlotKey(activeSlot, selectedSlotIndex);
+
   // Evaluate timing for current slot with server threshold
   const slotTiming = evaluateSlotTiming(activeSlot, selectedDate, lateThresholdMinutes);
 
-  // Checklist Items State: key is item_id
-  const [itemsState, setItemsState] = useState<Record<string, ChecklistItemState>>({});
+  // Per-Slot Checklist Items State: key is slotKey -> { [item_id]: ChecklistItemState }
+  const [slotStates, setSlotStates] = useState<Record<string, Record<string, ChecklistItemState>>>({});
+  // Per-Slot Execution Metadata: key is slotKey -> { execution_id, status, remarks, executed_at }
+  const [slotExecutions, setSlotExecutions] = useState<Record<string, any>>({});
+
   const [generalRemarks, setGeneralRemarks] = useState('');
   const [uploadingItemId, setUploadingItemId] = useState<string | number | null>(null);
 
-  // Fetch checklist items on mount
+  const currentSlotItems = slotStates[activeSlotKey] || {};
+  const activeSlotExecution = slotExecutions[activeSlotKey] || null;
+  const isSlotExecuted = Boolean(activeSlotExecution?.execution_id);
+
+  // Fetch checklist items and saved executions on mount
   useEffect(() => {
     dispatch(
       getChecklistItems({
         checklist_id: checklistId || assignment?.checklist_id,
         assignment_id: assignmentId || assignment?.assignment_id,
+        date: selectedDate || moment().format('YYYY-MM-DD'),
       }),
     );
-  }, [checklistId, assignmentId, assignment?.checklist_id, assignment?.assignment_id, dispatch]);
+  }, [checklistId, assignmentId, assignment?.checklist_id, assignment?.assignment_id, selectedDate, dispatch]);
 
-  // Initialize checklist items when data arrives without wiping existing state
+  // Initialize per-slot checklist items and previous executions when data arrives
   useEffect(() => {
     if (Array.isArray(checklistData?.data)) {
-      setItemsState(prev => {
-        const updated: Record<string, ChecklistItemState> = {...prev};
-        checklistData.data.forEach((category: any) => {
-          if (Array.isArray(category?.items)) {
-            category.items.forEach((item: any) => {
-              const id = String(item.item_id || item.id);
-              if (!updated[id]) {
-                updated[id] = {
-                  item_id: id,
-                  item_description: item.item_description || item.name || '',
-                  is_completed: 'Yes',
-                  remarks: '',
-                  photo_url: '',
-                };
-              } else if (!updated[id].item_description) {
-                updated[id].item_description = item.item_description || item.name || '';
-              }
-            });
+      const executionsBySlot = checklistData?.executions_by_slot || {};
+      const categoriesList = checklistData.data;
+
+      // Populate slot executions
+      setSlotExecutions(prev => {
+        const nextExecs = {...prev};
+        parsedSlots.forEach((s, idx) => {
+          const sKey = getSlotKey(s, idx);
+          if (executionsBySlot[sKey]) {
+            nextExecs[sKey] = executionsBySlot[sKey];
+          } else if (s.is_completed === 'Yes' && !nextExecs[sKey]) {
+            nextExecs[sKey] = {
+              execution_id: s.execution_id || 1,
+              status: s.execution_status || 'Completed',
+              remarks: s.remarks || '',
+              executed_at: s.executed_at || '',
+            };
           }
         });
-        return updated;
+        return nextExecs;
+      });
+
+      // Populate per-slot items state
+      setSlotStates(prev => {
+        const nextStates: Record<string, Record<string, ChecklistItemState>> = {...prev};
+
+        parsedSlots.forEach((s, idx) => {
+          const sKey = getSlotKey(s, idx);
+          const exec = executionsBySlot[sKey];
+
+          if (!nextStates[sKey]) {
+            nextStates[sKey] = {};
+          }
+
+          categoriesList.forEach((cat: any) => {
+            if (Array.isArray(cat?.items)) {
+              cat.items.forEach((item: any) => {
+                const id = String(item.item_id || item.id);
+                // If this slot was already executed on this date, load executed point
+                if (exec?.points && exec.points[id]) {
+                  nextStates[sKey][id] = {
+                    item_id: id,
+                    item_description: item.item_description || item.name || '',
+                    is_completed: exec.points[id].is_completed === 'No' ? 'No' : 'Yes',
+                    remarks: exec.points[id].remarks || '',
+                    photo_url: exec.points[id].photo_url || '',
+                  };
+                } else if (!nextStates[sKey][id]) {
+                  // Default fresh items for this slot
+                  nextStates[sKey][id] = {
+                    item_id: id,
+                    item_description: item.item_description || item.name || '',
+                    is_completed: 'Yes',
+                    remarks: '',
+                    photo_url: '',
+                  };
+                } else if (!nextStates[sKey][id].item_description) {
+                  nextStates[sKey][id].item_description = item.item_description || item.name || '';
+                }
+              });
+            }
+          });
+        });
+
+        return nextStates;
       });
     }
-  }, [checklistData]);
+  }, [checklistData, parsedSlots]);
 
   // Handle submit response
   useEffect(() => {
     if (submitSuccess) {
       toast.show('Cleaning checklist submitted successfully!', {type: 'success'});
       dispatch(resetSubmitState());
-      // Refresh schedules
+      // Refresh schedules and checklist data
       if (selectedDate) {
         dispatch(
           getScheduleSlots({
@@ -157,6 +216,13 @@ export const JanitorChecklistScreen = () => {
             emp_code: employeeCode,
             emp_id: employeeId,
             visit_date: selectedDate,
+          }),
+        );
+        dispatch(
+          getChecklistItems({
+            checklist_id: checklistId || assignment?.checklist_id,
+            assignment_id: assignmentId || assignment?.assignment_id,
+            date: selectedDate,
           }),
         );
       }
@@ -169,6 +235,10 @@ export const JanitorChecklistScreen = () => {
     submitSuccess,
     submitError,
     apiKey,
+    checklistId,
+    assignment?.checklist_id,
+    assignmentId,
+    assignment?.assignment_id,
     dispatch,
     employeeCode,
     employeeId,
@@ -178,8 +248,9 @@ export const JanitorChecklistScreen = () => {
   ]);
 
   const toggleItemStatus = (itemId: string, status: 'Yes' | 'No') => {
-    setItemsState(prev => {
-      const existing = prev[itemId] || {
+    setSlotStates(prev => {
+      const currentSlotMap = prev[activeSlotKey] || {};
+      const existing = currentSlotMap[itemId] || {
         item_id: itemId,
         item_description: '',
         is_completed: 'Yes',
@@ -193,17 +264,21 @@ export const JanitorChecklistScreen = () => {
 
       return {
         ...prev,
-        [itemId]: {
-          ...existing,
-          is_completed: nextStatus,
+        [activeSlotKey]: {
+          ...currentSlotMap,
+          [itemId]: {
+            ...existing,
+            is_completed: nextStatus,
+          },
         },
       };
     });
   };
 
   const updateItemRemarks = (itemId: string, text: string) => {
-    setItemsState(prev => {
-      const existing = prev[itemId] || {
+    setSlotStates(prev => {
+      const currentSlotMap = prev[activeSlotKey] || {};
+      const existing = currentSlotMap[itemId] || {
         item_id: itemId,
         item_description: '',
         is_completed: 'Yes',
@@ -212,9 +287,12 @@ export const JanitorChecklistScreen = () => {
       };
       return {
         ...prev,
-        [itemId]: {
-          ...existing,
-          remarks: text,
+        [activeSlotKey]: {
+          ...currentSlotMap,
+          [itemId]: {
+            ...existing,
+            remarks: text,
+          },
         },
       };
     });
@@ -245,8 +323,9 @@ export const JanitorChecklistScreen = () => {
       setUploadingItemId(null);
 
       if (uploadRes?.payload) {
-        setItemsState(prev => {
-          const existing = prev[itemId] || {
+        setSlotStates(prev => {
+          const currentSlotMap = prev[activeSlotKey] || {};
+          const existing = currentSlotMap[itemId] || {
             item_id: itemId,
             item_description: '',
             is_completed: 'Yes',
@@ -255,9 +334,12 @@ export const JanitorChecklistScreen = () => {
           };
           return {
             ...prev,
-            [itemId]: {
-              ...existing,
-              photo_url: uploadRes.payload,
+            [activeSlotKey]: {
+              ...currentSlotMap,
+              [itemId]: {
+                ...existing,
+                photo_url: uploadRes.payload,
+              },
             },
           };
         });
@@ -272,34 +354,34 @@ export const JanitorChecklistScreen = () => {
   };
 
   const handleSubmit = () => {
+    const currentSlotMap = slotStates[activeSlotKey] || {};
     const categoriesList = checklistData?.data || [];
     const pointsMap: Record<string, any> = {};
+
+    let totalPointsInSlot = 0;
+    let issuesCountInSlot = 0;
 
     if (Array.isArray(categoriesList)) {
       categoriesList.forEach((cat: any) => {
         if (Array.isArray(cat?.items)) {
           cat.items.forEach((it: any) => {
             const id = String(it.item_id || it.id);
+            totalPointsInSlot++;
+            const userState = currentSlotMap[id];
+            const isCompleted = userState?.is_completed || 'Yes';
+            if (isCompleted === 'No') {
+              issuesCountInSlot++;
+            }
             pointsMap[id] = {
               checklist_item_id: id,
-              is_completed: 'Yes',
-              remarks: '',
-              photo_url: '',
+              is_completed: isCompleted,
+              remarks: userState?.remarks || '',
+              photo_url: userState?.photo_url || '',
             };
           });
         }
       });
     }
-
-    Object.values(itemsState).forEach(st => {
-      const id = String(st.item_id);
-      pointsMap[id] = {
-        checklist_item_id: id,
-        is_completed: st.is_completed || 'Yes',
-        remarks: st.remarks || '',
-        photo_url: st.photo_url || '',
-      };
-    });
 
     const points = Object.values(pointsMap);
 
@@ -308,26 +390,30 @@ export const JanitorChecklistScreen = () => {
       return;
     }
 
+    // Determine completion status:
+    // If every item across all groups is completed, then 'Completed', else 'Partially Completed'
+    const isCompletedAll = issuesCountInSlot === 0 && totalPointsInSlot > 0;
+    const baseStatus = isCompletedAll ? 'Completed' : 'Partially Completed';
+
     // Timing evaluation & late calculation
     const isLate = slotTiming.isLate;
     const delayMinutes = slotTiming.delayMinutes;
-    const activeSlotName = activeSlot.name || activeSlot.slot_name || `Slot ${selectedSlotIndex + 1}`;
 
-    let executionStatus = 'Completed';
+    let executionStatus = baseStatus;
     let finalRemarks = generalRemarks;
 
     if (isLate) {
       const lateDurationFormatted = formatLateDuration(delayMinutes);
-      executionStatus = `Completed (Late by ${lateDurationFormatted})`;
+      executionStatus = `${baseStatus} (Late by ${lateDurationFormatted})`;
       const lateNote = `[LATE EXECUTION: Completed ${lateDurationFormatted} after scheduled end time (${activeSlot.end_time}, threshold: ${lateThresholdMinutes}m)]`;
       finalRemarks = generalRemarks ? `${lateNote} ${generalRemarks}` : lateNote;
     }
 
     Alert.alert(
-      'Confirm Submission',
-      isLate
-        ? `⚠️ This task is being completed LATE by ${formatLateDuration(delayMinutes)} (Scheduled end: ${activeSlot.end_time}, Allowed threshold: ${lateThresholdMinutes} mins).\n\nProceed with submission?`
-        : `Submit completed checklist for ${activeSlotName}?`,
+      isSlotExecuted ? 'Update Slot Execution' : 'Confirm Submission',
+      isCompletedAll
+        ? `All ${totalPointsInSlot} checklist tasks are marked as Done.\n\nThis slot (${activeSlotKey}) will be logged as COMPLETED.${isLate ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`
+        : `⚠️ NOTICE: ${issuesCountInSlot} of ${totalPointsInSlot} tasks are marked as Issue / Not Done.\n\nThis slot (${activeSlotKey}) will be logged as PARTIALLY COMPLETED.${isLate ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
@@ -363,7 +449,7 @@ export const JanitorChecklistScreen = () => {
             dispatch(
               submitChecklistExecution({
                 assignment_id: assignmentId || assignment?.assignment_id || assignment?.id,
-                slot: activeSlotName,
+                slot: activeSlotKey,
                 date: selectedDate || moment().format('YYYY-MM-DD'),
                 status: executionStatus,
                 remarks: finalRemarks,
@@ -382,6 +468,22 @@ export const JanitorChecklistScreen = () => {
   };
 
   const categories = checklistData?.data || [];
+
+  // Summary counts for current slot
+  let activeSlotTotalCount = 0;
+  let activeSlotIssuesCount = 0;
+  categories.forEach((cat: any) => {
+    if (Array.isArray(cat?.items)) {
+      cat.items.forEach((it: any) => {
+        activeSlotTotalCount++;
+        const itId = String(it.item_id || it.id);
+        if (currentSlotItems[itId]?.is_completed === 'No') {
+          activeSlotIssuesCount++;
+        }
+      });
+    }
+  });
+  const isActiveSlotAllDone = activeSlotIssuesCount === 0 && activeSlotTotalCount > 0;
 
   return (
     <View style={styles.container}>
@@ -432,6 +534,10 @@ export const JanitorChecklistScreen = () => {
               {parsedSlots.map((s, idx) => {
                 const isSelected = selectedSlotIndex === idx;
                 const slotLabel = s.name || s.slot_name || `Slot ${idx + 1}`;
+                const slotKey = getSlotKey(s, idx);
+                const exec = slotExecutions[slotKey];
+                const isCompleted = exec?.status?.includes('Completed') && !exec?.status?.includes('Partially');
+                const isPartial = exec?.status?.includes('Partially');
                 const timeRule = s.start_time && s.end_time && s.end_time !== '0'
                   ? `${s.start_time} - ${s.end_time}`
                   : 'Flexible';
@@ -440,13 +546,29 @@ export const JanitorChecklistScreen = () => {
                   <TouchableOpacity
                     key={idx}
                     activeOpacity={0.8}
-                    style={[styles.slotPill, isSelected && styles.slotPillActive]}
+                    style={[
+                      styles.slotPill,
+                      isSelected && styles.slotPillActive,
+                      isCompleted && !isSelected && styles.slotPillDoneBorder,
+                      isPartial && !isSelected && styles.slotPillPartialBorder,
+                    ]}
                     onPress={() => setSelectedSlotIndex(idx)}>
-                    <Text style={[styles.slotPillTitle, isSelected && styles.slotPillTitleActive]}>
-                      {slotLabel}
-                    </Text>
+                    <View style={styles.slotPillTopRow}>
+                      <Text style={[styles.slotPillTitle, isSelected && styles.slotPillTitleActive]}>
+                        {slotLabel}
+                      </Text>
+                      {isCompleted ? (
+                        <View style={styles.pillDoneBadge}>
+                          <MaterialIcons name="check" size={11} color={colors.white} />
+                        </View>
+                      ) : isPartial ? (
+                        <View style={styles.pillPartialBadge}>
+                          <MaterialIcons name="warning" size={11} color={colors.white} />
+                        </View>
+                      ) : null}
+                    </View>
                     <Text style={[styles.slotPillSub, isSelected && styles.slotPillSubActive]}>
-                      {timeRule}
+                      {isCompleted ? 'Done ✓' : isPartial ? 'Partial ⚠️' : timeRule}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -468,6 +590,28 @@ export const JanitorChecklistScreen = () => {
           )}
         </View>
 
+        {/* Executed Slot Status Banner */}
+        {isSlotExecuted && (
+          <View style={[styles.slotBannerBox, isActiveSlotAllDone ? styles.slotBannerBoxDone : styles.slotBannerBoxPartial]}>
+            <MaterialIcons
+              name={isActiveSlotAllDone ? 'verified' : 'report-problem'}
+              size={24}
+              color={isActiveSlotAllDone ? '#059669' : '#D97706'}
+            />
+            <View style={styles.slotBannerTextWrap}>
+              <Text style={[styles.slotBannerTitle, {color: isActiveSlotAllDone ? '#065F46' : '#92400E'}]}>
+                {activeSlotKey} • {activeSlotExecution.status}
+              </Text>
+              <Text style={styles.slotBannerSubtitle}>
+                {activeSlotExecution.executed_at ? `Submitted at ${activeSlotExecution.executed_at}. ` : ''}
+                {isActiveSlotAllDone
+                  ? 'All tasks in this slot were completed.'
+                  : 'Certain tasks were flagged with issues or not completed.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Checklist Category Groups */}
         {checklistLoading ? (
           <View style={styles.loadingBox}>
@@ -482,17 +626,35 @@ export const JanitorChecklistScreen = () => {
         ) : (
           categories.map((category: any, catIdx: number) => {
             const catItems = category?.items || [];
+            const groupIssues = catItems.filter((it: any) => {
+              const itId = String(it.item_id || it.id);
+              return currentSlotItems[itId]?.is_completed === 'No';
+            }).length;
+            const groupHasIssue = groupIssues > 0;
+
             return (
               <View key={category.category_id || catIdx} style={styles.categoryCard}>
                 <View style={styles.categoryHeader}>
-                  <MaterialIcons name="cleaning-services" size={18} color={colors.primary} />
-                  <Text style={styles.categoryTitle}>{category.category_name || 'Category'}</Text>
-                  <Text style={styles.itemCountBadge}>{catItems.length} items</Text>
+                  <View style={{flexDirection: 'row', alignItems: 'center', flex: 1}}>
+                    <MaterialIcons name="cleaning-services" size={18} color={colors.primary} />
+                    <Text style={styles.categoryTitle}>{category.category_name || 'Category'}</Text>
+                    <Text style={styles.itemCountBadge}>{catItems.length} items</Text>
+                  </View>
+                  <View style={[styles.groupStatusBadge, groupHasIssue ? styles.groupBadgeIssue : styles.groupBadgeSuccess]}>
+                    <MaterialIcons
+                      name={groupHasIssue ? 'warning' : 'check-circle'}
+                      size={12}
+                      color={groupHasIssue ? '#DC2626' : '#059669'}
+                    />
+                    <Text style={[styles.groupStatusText, {color: groupHasIssue ? '#DC2626' : '#059669'}]}>
+                      {groupHasIssue ? `${groupIssues} Issue${groupIssues > 1 ? 's' : ''}` : 'All Done ✓'}
+                    </Text>
+                  </View>
                 </View>
 
                 {catItems.map((item: any, itemIdx: number) => {
                   const itemId = String(item.item_id || item.id);
-                  const state = itemsState[itemId] || {
+                  const state = currentSlotItems[itemId] || {
                     item_id: itemId,
                     is_completed: 'Yes',
                     remarks: '',
@@ -626,16 +788,21 @@ export const JanitorChecklistScreen = () => {
         {/* Submit Execution Button */}
         <TouchableOpacity
           activeOpacity={0.85}
-          style={[styles.submitButton, submitLoading && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            !isActiveSlotAllDone && styles.submitButtonPartial,
+            submitLoading && styles.submitButtonDisabled,
+          ]}
           onPress={handleSubmit}
           disabled={submitLoading || checklistLoading}>
           {submitLoading ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
             <>
-              <MaterialIcons name="send" size={20} color={colors.white} />
+              <MaterialIcons name={isSlotExecuted ? 'edit' : 'send'} size={20} color={colors.white} />
               <Text style={styles.submitButtonText}>
-                {slotTiming.isLate ? 'SUBMIT CHECKLIST (LATE)' : 'SUBMIT CHECKLIST'}
+                {isSlotExecuted ? 'UPDATE CHECKLIST' : 'SUBMIT CHECKLIST'}{' '}
+                ({isActiveSlotAllDone ? 'COMPLETED' : 'PARTIALLY COMPLETED'}{slotTiming.isLate ? ' - LATE' : ''})
               </Text>
             </>
           )}
@@ -733,12 +900,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     marginRight: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
+    minWidth: 100,
   },
   slotPillActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+  },
+  slotPillDoneBorder: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  slotPillPartialBorder: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+  },
+  slotPillTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   slotPillTitle: {
     fontSize: scaleFont(12),
@@ -750,12 +931,77 @@ const styles = StyleSheet.create({
   },
   slotPillSub: {
     fontSize: scaleFont(10),
-    fontFamily: FontFamily.regular,
+    fontFamily: FontFamily.medium,
     color: colors.grey,
     marginTop: 2,
   },
   slotPillSubActive: {
     color: '#E0F2FE',
+  },
+  pillDoneBadge: {
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  pillPartialBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  slotBannerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1.5,
+  },
+  slotBannerBoxDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  slotBannerBoxPartial: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  slotBannerTextWrap: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  slotBannerTitle: {
+    fontSize: scaleFont(13),
+    fontFamily: FontFamily.bold,
+  },
+  slotBannerSubtitle: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  groupStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  groupBadgeSuccess: {
+    backgroundColor: '#ECFDF5',
+  },
+  groupBadgeIssue: {
+    backgroundColor: '#FEF2F2',
+  },
+  groupStatusText: {
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.bold,
+    marginLeft: 4,
+  },
+  submitButtonPartial: {
+    backgroundColor: '#D97706',
   },
   lateWarningBox: {
     flexDirection: 'row',
