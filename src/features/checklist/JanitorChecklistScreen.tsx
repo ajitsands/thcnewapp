@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   TextInput,
   Image,
   Alert,
@@ -114,25 +115,31 @@ export const JanitorChecklistScreen = () => {
     );
   }, [checklistId, assignmentId, assignment?.checklist_id, assignment?.assignment_id, dispatch]);
 
-  // Initialize checklist items when data arrives
+  // Initialize checklist items when data arrives without wiping existing state
   useEffect(() => {
     if (Array.isArray(checklistData?.data)) {
-      const initial: Record<string, ChecklistItemState> = {};
-      checklistData.data.forEach((category: any) => {
-        if (Array.isArray(category?.items)) {
-          category.items.forEach((item: any) => {
-            const id = String(item.item_id || item.id);
-            initial[id] = {
-              item_id: id,
-              item_description: item.item_description || item.name || '',
-              is_completed: 'Yes',
-              remarks: '',
-              photo_url: '',
-            };
-          });
-        }
+      setItemsState(prev => {
+        const updated: Record<string, ChecklistItemState> = {...prev};
+        checklistData.data.forEach((category: any) => {
+          if (Array.isArray(category?.items)) {
+            category.items.forEach((item: any) => {
+              const id = String(item.item_id || item.id);
+              if (!updated[id]) {
+                updated[id] = {
+                  item_id: id,
+                  item_description: item.item_description || item.name || '',
+                  is_completed: 'Yes',
+                  remarks: '',
+                  photo_url: '',
+                };
+              } else if (!updated[id].item_description) {
+                updated[id].item_description = item.item_description || item.name || '';
+              }
+            });
+          }
+        });
+        return updated;
       });
-      setItemsState(initial);
     }
   }, [checklistData]);
 
@@ -171,23 +178,46 @@ export const JanitorChecklistScreen = () => {
   ]);
 
   const toggleItemStatus = (itemId: string, status: 'Yes' | 'No') => {
-    setItemsState(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        is_completed: status,
-      },
-    }));
+    setItemsState(prev => {
+      const existing = prev[itemId] || {
+        item_id: itemId,
+        item_description: '',
+        is_completed: 'Yes',
+        remarks: '',
+        photo_url: '',
+      };
+      // If clicking currently active status, toggle to other status; otherwise set to clicked status
+      const nextStatus = existing.is_completed === status
+        ? (status === 'Yes' ? 'No' : 'Yes')
+        : status;
+
+      return {
+        ...prev,
+        [itemId]: {
+          ...existing,
+          is_completed: nextStatus,
+        },
+      };
+    });
   };
 
   const updateItemRemarks = (itemId: string, text: string) => {
-    setItemsState(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        remarks: text,
-      },
-    }));
+    setItemsState(prev => {
+      const existing = prev[itemId] || {
+        item_id: itemId,
+        item_description: '',
+        is_completed: 'Yes',
+        remarks: '',
+        photo_url: '',
+      };
+      return {
+        ...prev,
+        [itemId]: {
+          ...existing,
+          remarks: text,
+        },
+      };
+    });
   };
 
   const handleTakePhoto = async (itemId: string) => {
@@ -215,13 +245,22 @@ export const JanitorChecklistScreen = () => {
       setUploadingItemId(null);
 
       if (uploadRes?.payload) {
-        setItemsState(prev => ({
-          ...prev,
-          [itemId]: {
-            ...prev[itemId],
-            photo_url: uploadRes.payload,
-          },
-        }));
+        setItemsState(prev => {
+          const existing = prev[itemId] || {
+            item_id: itemId,
+            item_description: '',
+            is_completed: 'Yes',
+            remarks: '',
+            photo_url: '',
+          };
+          return {
+            ...prev,
+            [itemId]: {
+              ...existing,
+              photo_url: uploadRes.payload,
+            },
+          };
+        });
         toast.show('Proof photo attached!', {type: 'success'});
       } else {
         toast.show('Failed to upload proof photo', {type: 'warning'});
@@ -233,12 +272,36 @@ export const JanitorChecklistScreen = () => {
   };
 
   const handleSubmit = () => {
-    const points = Object.values(itemsState).map(item => ({
-      checklist_item_id: item.item_id,
-      is_completed: item.is_completed,
-      remarks: item.remarks || '',
-      photo_url: item.photo_url || '',
-    }));
+    const categoriesList = checklistData?.data || [];
+    const pointsMap: Record<string, any> = {};
+
+    if (Array.isArray(categoriesList)) {
+      categoriesList.forEach((cat: any) => {
+        if (Array.isArray(cat?.items)) {
+          cat.items.forEach((it: any) => {
+            const id = String(it.item_id || it.id);
+            pointsMap[id] = {
+              checklist_item_id: id,
+              is_completed: 'Yes',
+              remarks: '',
+              photo_url: '',
+            };
+          });
+        }
+      });
+    }
+
+    Object.values(itemsState).forEach(st => {
+      const id = String(st.item_id);
+      pointsMap[id] = {
+        checklist_item_id: id,
+        is_completed: st.is_completed || 'Yes',
+        remarks: st.remarks || '',
+        photo_url: st.photo_url || '',
+      };
+    });
+
+    const points = Object.values(pointsMap);
 
     if (points.length === 0) {
       Alert.alert('Notice', 'No checklist items found to submit.');
@@ -324,7 +387,12 @@ export const JanitorChecklistScreen = () => {
     <View style={styles.container}>
       <Header isHome={false} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled={true}>
         {/* Verification Summary Card */}
         <View style={styles.verifiedHeaderCard}>
           <View style={styles.verifiedIconWrap}>
@@ -442,11 +510,13 @@ export const JanitorChecklistScreen = () => {
 
                         {/* Yes / No Toggle Buttons */}
                         <View style={styles.statusToggleGroup}>
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            style={[
+                          <Pressable
+                            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                            android_ripple={{color: 'rgba(0,0,0,0.1)'}}
+                            style={({pressed}) => [
                               styles.toggleBtn,
                               isDone ? styles.toggleBtnYesActive : styles.toggleBtnInactive,
+                              pressed && styles.toggleBtnPressed,
                             ]}
                             onPress={() => toggleItemStatus(itemId, 'Yes')}>
                             <MaterialIcons
@@ -461,14 +531,16 @@ export const JanitorChecklistScreen = () => {
                               ]}>
                               Done
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
 
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            style={[
+                          <Pressable
+                            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                            android_ripple={{color: 'rgba(0,0,0,0.1)'}}
+                            style={({pressed}) => [
                               styles.toggleBtn,
                               styles.toggleBtnSpacing,
                               !isDone ? styles.toggleBtnNoActive : styles.toggleBtnInactive,
+                              pressed && styles.toggleBtnPressed,
                             ]}
                             onPress={() => toggleItemStatus(itemId, 'No')}>
                             <MaterialIcons
@@ -483,7 +555,7 @@ export const JanitorChecklistScreen = () => {
                               ]}>
                               Issue / Not Done
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
 
                         {/* Optional Item Remarks Input */}
@@ -752,22 +824,26 @@ const styles = StyleSheet.create({
   toggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 1.5,
+  },
+  toggleBtnPressed: {
+    opacity: 0.7,
+    transform: [{scale: 0.96}],
   },
   toggleBtnInactive: {
     backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
   },
   toggleBtnYesActive: {
     backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    borderColor: '#059669',
   },
   toggleBtnNoActive: {
     backgroundColor: '#EF4444',
-    borderColor: '#EF4444',
+    borderColor: '#DC2626',
   },
   toggleBtnText: {
     fontSize: scaleFont(12),
