@@ -22,7 +22,7 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 export const ScheduleSlots = ({route}: any) => {
   const currentDate = route?.params?.day || 'Selected Date';
   const {data, loading, error, status}: any = useAppSelector((state: any) => state.slots);
-  const {employeeCode, apiKey}: any = useAppSelector((state: any) => state.app);
+  const {employeeCode, apiKey, employeeType}: any = useAppSelector((state: any) => state.app);
   const slots = data?.data || {};
   const toast = useToast();
   const dispatch = useAppDispatch();
@@ -63,9 +63,12 @@ export const ScheduleSlots = ({route}: any) => {
   };
 
   const isJanitor =
-    Array.isArray(data?.data) &&
-    data?.data.length > 0 &&
-    (!!data?.data[0]?.assignment_id || !!data?.data[0]?.checklist_name);
+    (employeeType || '').toLowerCase().includes('janitor') ||
+    data?.settings !== undefined ||
+    (Array.isArray(data?.data) &&
+      data?.data.length > 0 &&
+      (!!data?.data[0]?.assignment_id || !!data?.data[0]?.checklist_name)) ||
+    (employeeCode || '').toUpperCase().startsWith('CG-THC-029');
 
   return (
     <View style={styles.container}>
@@ -88,162 +91,173 @@ export const ScheduleSlots = ({route}: any) => {
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Cleaning Assignments</Text>
               <Text style={styles.assignmentCountBadge}>
-                {data.data.length} {data.data.length === 1 ? 'Task' : 'Tasks'}
+                {Array.isArray(data?.data) ? data.data.length : 0}{' '}
+                {Array.isArray(data?.data) && data.data.length === 1 ? 'Task' : 'Tasks'}
               </Text>
             </View>
 
-            {data.data.map((item: any, idx: number) => {
-              const statusColor = item.work_status_color || colors.primary;
+            {Array.isArray(data?.data) && data.data.length > 0 ? (
+              data.data.map((item: any, idx: number) => {
+                const statusColor = item.work_status_color || colors.primary;
 
-              // Parse slots_detail if available
-              let slotRules: any[] = [];
-              try {
-                if (typeof item.slots_detail === 'string' && item.slots_detail.startsWith('[')) {
-                  slotRules = JSON.parse(item.slots_detail);
-                } else if (Array.isArray(item.slots_detail)) {
-                  slotRules = item.slots_detail;
+                // Parse slots_detail if available
+                let slotRules: any[] = [];
+                try {
+                  if (typeof item.slots_detail === 'string' && item.slots_detail.startsWith('[')) {
+                    slotRules = JSON.parse(item.slots_detail);
+                  } else if (Array.isArray(item.slots_detail)) {
+                    slotRules = item.slots_detail;
+                  }
+                } catch (e) {
+                  slotRules = [];
                 }
-              } catch (e) {
-                slotRules = [];
-              }
 
-              const slotsList = Array.isArray(item.slots_list) && item.slots_list.length > 0
-                ? item.slots_list
-                : slotRules;
+                const slotsList = Array.isArray(item.slots_list) && item.slots_list.length > 0
+                  ? item.slots_list
+                  : slotRules;
 
-              return (
-                <View key={item.assignment_id || idx} style={styles.janitorCard}>
-                  {/* Card Header */}
-                  <View style={styles.janitorCardHeader}>
-                    <View style={styles.checklistInfoCol}>
-                      <Text style={styles.checklistTitle}>{item.checklist_name || 'Cleaning Task'}</Text>
-                      <Text style={styles.assignmentRefText}>
-                        #{item.assignment_ref_no || `TASK-${idx + 1}`} • {item.frequency || 'Daily'}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusBadge, {backgroundColor: statusColor}]}>
-                      <Text style={styles.statusBadgeText}>{item.work_status || 'Scheduled'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardDivider} />
-
-                  {/* Location & Building */}
-                  <View style={styles.metaRow}>
-                    <MaterialIcons name="business" size={16} color={colors.primary} />
-                    <Text style={styles.metaLabel}>Building / Location:</Text>
-                    <Text style={styles.metaValue} numberOfLines={1}>
-                      {item.building_name || 'N/A'} {item.location_name ? `(${item.location_name})` : ''}
-                    </Text>
-                  </View>
-
-                  {/* Interactive Asset Row (Tap opens QR Reader) */}
-                  <TouchableOpacity
-                    activeOpacity={0.75}
-                    style={styles.assetInteractiveCard}
-                    onPress={() => handleScanAsset(item)}>
-                    <View style={styles.assetIconBadge}>
-                      <MaterialIcons name="qr-code-scanner" size={20} color={colors.primary} />
-                    </View>
-                    <View style={styles.assetInfoCol}>
-                      <Text style={styles.assetSubLabel}>ASSET CODE (TAP TO SCAN)</Text>
-                      <Text style={styles.assetRefValue} numberOfLines={1}>
-                        {item.asset_ref_no || 'Tap to Scan Asset'}
-                      </Text>
-                      <Text style={styles.assetDescValue} numberOfLines={1}>
-                        {item.asset_description ? `${item.asset_description} • ` : ''}
-                        {item.room_no ? `Room ${item.room_no} • ` : ''}
-                        {item.zone_floor ? `Floor ${item.zone_floor}` : ''}
-                      </Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={24} color={colors.primary} />
-                  </TouchableOpacity>
-
-                  {/* Assigned Slots / Shifts with Timing Check */}
-                  {Array.isArray(slotsList) && slotsList.length > 0 && (
-                    <View style={styles.slotsSection}>
-                      <Text style={styles.slotsHeaderTitle}>Time Slots & Schedule Window:</Text>
-                      <View style={styles.slotsPillsRow}>
-                        {slotsList.map((s: any, sIdx: number) => {
-                          const isDone = s.is_completed === 'Yes' || s.execution_status === 'Completed';
-                          const lateThreshold = Number(data?.settings?.late_time_minutes) >= 0 ? Number(data.settings.late_time_minutes) : 15;
-                          const timing = evaluateSlotTiming(s, data?.date || currentDate, lateThreshold);
-                          const slotLabel = s.slot_name || s.name || s.slot_time || `Slot ${sIdx + 1}`;
-                          const timeRuleText = s.start_time && s.end_time && s.end_time !== '0'
-                            ? `${s.start_time} - ${s.end_time}`
-                            : s.time_rule && s.time_rule !== 'No Rule'
-                            ? s.time_rule
-                            : '';
-
-                          const slotStatusText = isDone
-                            ? 'Completed'
-                            : timing.isLate
-                            ? `Late by ${formatLateDuration(timing.delayMinutes)}`
-                            : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                            ? 'Pending (On Time)'
-                            : 'Pending';
-
-                          return (
-                            <View
-                              key={sIdx}
-                              style={[
-                                styles.slotPill,
-                                isDone
-                                  ? styles.slotPillDone
-                                  : timing.isLate
-                                  ? styles.slotPillLate
-                                  : styles.slotPillPending,
-                              ]}>
-                              <MaterialIcons
-                                name={
-                                  isDone
-                                    ? 'check-circle'
-                                    : timing.isLate
-                                    ? 'alarm-on'
-                                    : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                                    ? 'check-circle'
-                                    : 'schedule'
-                                }
-                                size={13}
-                                color={
-                                  isDone
-                                    ? '#059669'
-                                    : timing.isLate
-                                    ? '#DC2626'
-                                    : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                                    ? '#059669'
-                                    : colors.primary
-                                }
-                              />
-                              <Text
-                                style={[
-                                  styles.slotPillText,
-                                  isDone
-                                    ? styles.slotPillTextDone
-                                    : timing.isLate
-                                    ? styles.slotPillTextLate
-                                    : styles.slotPillTextPending,
-                                ]}>
-                                {slotLabel} {timeRuleText ? `(${timeRuleText})` : ''} - {slotStatusText}
-                              </Text>
-                            </View>
-                          );
-                        })}
+                return (
+                  <View key={item.assignment_id || idx} style={styles.janitorCard}>
+                    {/* Card Header */}
+                    <View style={styles.janitorCardHeader}>
+                      <View style={styles.checklistInfoCol}>
+                        <Text style={styles.checklistTitle}>{item.checklist_name || 'Cleaning Task'}</Text>
+                        <Text style={styles.assignmentRefText}>
+                          #{item.assignment_ref_no || `TASK-${idx + 1}`} • {item.frequency || 'Daily'}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, {backgroundColor: statusColor}]}>
+                        <Text style={styles.statusBadgeText}>{item.work_status || 'Scheduled'}</Text>
                       </View>
                     </View>
-                  )}
 
-                  {/* Primary Scan & Start Cleaning CTA Button */}
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={styles.scanCtaButton}
-                    onPress={() => handleScanAsset(item)}>
-                    <MaterialIcons name="qr-code-scanner" size={20} color={colors.white} />
-                    <Text style={styles.scanCtaButtonText}>SCAN ASSET QR TO START</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+                    <View style={styles.cardDivider} />
+
+                    {/* Location & Building */}
+                    <View style={styles.metaRow}>
+                      <MaterialIcons name="business" size={16} color={colors.primary} />
+                      <Text style={styles.metaLabel}>Building / Location:</Text>
+                      <Text style={styles.metaValue} numberOfLines={1}>
+                        {item.building_name || 'N/A'} {item.location_name ? `(${item.location_name})` : ''}
+                      </Text>
+                    </View>
+
+                    {/* Interactive Asset Row (Tap opens QR Reader) */}
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={styles.assetInteractiveCard}
+                      onPress={() => handleScanAsset(item)}>
+                      <View style={styles.assetIconBadge}>
+                        <MaterialIcons name="qr-code-scanner" size={20} color={colors.primary} />
+                      </View>
+                      <View style={styles.assetInfoCol}>
+                        <Text style={styles.assetSubLabel}>ASSET CODE (TAP TO SCAN)</Text>
+                        <Text style={styles.assetRefValue} numberOfLines={1}>
+                          {item.asset_ref_no || 'Tap to Scan Asset'}
+                        </Text>
+                        <Text style={styles.assetDescValue} numberOfLines={1}>
+                          {item.asset_description ? `${item.asset_description} • ` : ''}
+                          {item.room_no ? `Room ${item.room_no} • ` : ''}
+                          {item.zone_floor ? `Floor ${item.zone_floor}` : ''}
+                        </Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={24} color={colors.primary} />
+                    </TouchableOpacity>
+
+                    {/* Assigned Slots / Shifts with Timing Check */}
+                    {Array.isArray(slotsList) && slotsList.length > 0 && (
+                      <View style={styles.slotsSection}>
+                        <Text style={styles.slotsHeaderTitle}>Time Slots & Schedule Window:</Text>
+                        <View style={styles.slotsPillsRow}>
+                          {slotsList.map((s: any, sIdx: number) => {
+                            const isDone = s.is_completed === 'Yes' || s.execution_status === 'Completed';
+                            const lateThreshold = Number(data?.settings?.late_time_minutes) >= 0 ? Number(data.settings.late_time_minutes) : 15;
+                            const timing = evaluateSlotTiming(s, data?.date || currentDate, lateThreshold);
+                            const slotLabel = s.slot_name || s.name || s.slot_time || `Slot ${sIdx + 1}`;
+                            const timeRuleText = s.start_time && s.end_time && s.end_time !== '0'
+                              ? `${s.start_time} - ${s.end_time}`
+                              : s.time_rule && s.time_rule !== 'No Rule'
+                              ? s.time_rule
+                              : '';
+
+                            const slotStatusText = isDone
+                              ? 'Completed'
+                              : timing.isLate
+                              ? `Late by ${formatLateDuration(timing.delayMinutes)}`
+                              : timing.isWithinWindow && s.start_time && s.start_time !== '0'
+                              ? 'Pending (On Time)'
+                              : 'Pending';
+
+                            return (
+                              <View
+                                key={sIdx}
+                                style={[
+                                  styles.slotPill,
+                                  isDone
+                                    ? styles.slotPillDone
+                                    : timing.isLate
+                                    ? styles.slotPillLate
+                                    : styles.slotPillPending,
+                                ]}>
+                                <MaterialIcons
+                                  name={
+                                    isDone
+                                      ? 'check-circle'
+                                      : timing.isLate
+                                      ? 'alarm-on'
+                                      : timing.isWithinWindow && s.start_time && s.start_time !== '0'
+                                      ? 'check-circle'
+                                      : 'schedule'
+                                  }
+                                  size={13}
+                                  color={
+                                    isDone
+                                      ? '#059669'
+                                      : timing.isLate
+                                      ? '#DC2626'
+                                      : timing.isWithinWindow && s.start_time && s.start_time !== '0'
+                                      ? '#059669'
+                                      : colors.primary
+                                  }
+                                />
+                                <Text
+                                  style={[
+                                    styles.slotPillText,
+                                    isDone
+                                      ? styles.slotPillTextDone
+                                      : timing.isLate
+                                      ? styles.slotPillTextLate
+                                      : styles.slotPillTextPending,
+                                  ]}>
+                                  {slotLabel} {timeRuleText ? `(${timeRuleText})` : ''} - {slotStatusText}
+                                </Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Primary Scan & Start Cleaning CTA Button */}
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={styles.scanCtaButton}
+                      onPress={() => handleScanAsset(item)}>
+                      <MaterialIcons name="qr-code-scanner" size={20} color={colors.white} />
+                      <Text style={styles.scanCtaButtonText}>SCAN ASSET QR TO START</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyTasksCard}>
+                <MaterialIcons name="event-busy" size={44} color="#94A3B8" />
+                <Text style={styles.emptyTasksTitle}>No Cleaning Tasks Scheduled</Text>
+                <Text style={styles.emptyTasksSubtitle}>
+                  There are no cleaning assignments scheduled for {currentDate}.
+                </Text>
+              </View>
+            )}
           </View>
         ) : (
           /* Technician 24-Hour Slots Grid Container */
@@ -617,6 +631,30 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: 0.5,
     marginLeft: 8,
+  },
+  emptyTasksCard: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    marginTop: 10,
+  },
+  emptyTasksTitle: {
+    fontSize: scaleFont(15),
+    fontFamily: FontFamily.bold,
+    color: colors.header,
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  emptyTasksSubtitle: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.regular,
+    color: '#64748B',
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 

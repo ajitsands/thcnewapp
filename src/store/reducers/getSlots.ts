@@ -51,9 +51,10 @@ export const getScheduleSlots = createAsyncThunk(
         profileData?.id ||
         '';
 
+      const empType = (appState?.employeeType || loginData?.employee_type || loginData?.employee_type_name || '').toLowerCase();
       const isJanitor =
-        (appState?.employeeType || loginData?.employee_type || '').toLowerCase().includes('janitor') ||
-        empCode.toUpperCase().startsWith('CG-THC');
+        empType.includes('janitor') ||
+        (empType === '' && (empCode.toUpperCase().startsWith('CG-THC-029') || empCode.toUpperCase().startsWith('JN-')));
 
       const targetUrl = isJanitor ? ApiUrl.janitorURL : ApiUrl.getScheduleURL;
       const targetAction = isJanitor ? 'get_schedules_by_date' : 'get_date_slots';
