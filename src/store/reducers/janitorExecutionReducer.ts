@@ -2,6 +2,12 @@ import {createAsyncThunk, createSlice} from '@reduxjs/toolkit';
 import {postRequest, getRequest} from '../../network/services';
 import {ApiUrl} from '../../network/endpoints';
 
+export interface JanitorSettings {
+  min_radius_meters: number;
+  late_time_minutes: number;
+  allow_gps_bypass: 'YES' | 'NO' | string;
+}
+
 interface JanitorExecutionState {
   verificationLoading: boolean;
   verificationData: any;
@@ -18,6 +24,9 @@ interface JanitorExecutionState {
   submitLoading: boolean;
   submitSuccess: boolean;
   submitError: string;
+
+  settings: JanitorSettings;
+  settingsLoading: boolean;
 }
 
 const initialState: JanitorExecutionState = {
@@ -36,6 +45,13 @@ const initialState: JanitorExecutionState = {
   submitLoading: false,
   submitSuccess: false,
   submitError: '',
+
+  settings: {
+    min_radius_meters: 50,
+    late_time_minutes: 15,
+    allow_gps_bypass: 'NO',
+  },
+  settingsLoading: false,
 };
 
 /**
@@ -277,6 +293,33 @@ export const submitChecklistExecution = createAsyncThunk(
   },
 );
 
+/**
+ * Endpoint: Get Janitor Settings (min_radius_meters, late_time_minutes, allow_gps_bypass)
+ */
+export const getJanitorSettings = createAsyncThunk(
+  'janitorExecution/getJanitorSettings',
+  async (params: any = {}, {rejectWithValue, getState}) => {
+    try {
+      const state: any = getState();
+      const appState = state?.app || {};
+      const loginData = state?.userLogin?.data || {};
+      const apiKey = params?.APIKEY || appState?.apiKey || loginData?.APIKEY || ApiUrl.janitorApiKey;
+
+      const response = await getRequest(ApiUrl.janitorURL, {
+        action: 'get_janitor_settings',
+        APIKEY: apiKey,
+      });
+
+      if (response?.data?.settings) {
+        return response.data.settings;
+      }
+      return rejectWithValue('No settings returned');
+    } catch (err: any) {
+      return rejectWithValue(err?.message || 'Failed to fetch settings');
+    }
+  },
+);
+
 const janitorExecutionSlice = createSlice({
   name: 'janitorExecution',
   initialState,
@@ -291,8 +334,36 @@ const janitorExecutionSlice = createSlice({
       state.submitSuccess = false;
       state.submitError = '';
     },
+    setJanitorSettings: (state, action) => {
+      if (action.payload) {
+        state.settings = {
+          min_radius_meters: Number(action.payload.min_radius_meters) || state.settings.min_radius_meters,
+          late_time_minutes: Number(action.payload.late_time_minutes) ?? state.settings.late_time_minutes,
+          allow_gps_bypass: action.payload.allow_gps_bypass ?? state.settings.allow_gps_bypass,
+        };
+      }
+    },
   },
   extraReducers: builder => {
+    // Get Janitor Settings
+    builder
+      .addCase(getJanitorSettings.pending, state => {
+        state.settingsLoading = true;
+      })
+      .addCase(getJanitorSettings.fulfilled, (state, action) => {
+        state.settingsLoading = false;
+        if (action.payload) {
+          state.settings = {
+            min_radius_meters: Number(action.payload.min_radius_meters) || 50,
+            late_time_minutes: Number(action.payload.late_time_minutes) ?? 15,
+            allow_gps_bypass: action.payload.allow_gps_bypass || 'NO',
+          };
+        }
+      })
+      .addCase(getJanitorSettings.rejected, state => {
+        state.settingsLoading = false;
+      });
+
     // Verify Asset and Location
     builder
       .addCase(verifyAssetAndLocation.pending, state => {
@@ -303,6 +374,13 @@ const janitorExecutionSlice = createSlice({
         state.verificationLoading = false;
         state.verificationData = action.payload;
         state.verificationError = '';
+        if (action.payload?.settings) {
+          state.settings = {
+            min_radius_meters: Number(action.payload.settings.min_radius_meters) || state.settings.min_radius_meters,
+            late_time_minutes: Number(action.payload.settings.late_time_minutes) ?? state.settings.late_time_minutes,
+            allow_gps_bypass: action.payload.settings.allow_gps_bypass || state.settings.allow_gps_bypass,
+          };
+        }
       })
       .addCase(verifyAssetAndLocation.rejected, (state, action) => {
         state.verificationLoading = false;
@@ -319,6 +397,13 @@ const janitorExecutionSlice = createSlice({
         state.checklistLoading = false;
         state.checklistData = action.payload;
         state.checklistError = '';
+        if (action.payload?.settings) {
+          state.settings = {
+            min_radius_meters: Number(action.payload.settings.min_radius_meters) || state.settings.min_radius_meters,
+            late_time_minutes: Number(action.payload.settings.late_time_minutes) ?? state.settings.late_time_minutes,
+            allow_gps_bypass: action.payload.settings.allow_gps_bypass || state.settings.allow_gps_bypass,
+          };
+        }
       })
       .addCase(getChecklistItems.rejected, (state, action) => {
         state.checklistLoading = false;
@@ -360,5 +445,5 @@ const janitorExecutionSlice = createSlice({
   },
 });
 
-export const {resetVerification, resetSubmitState} = janitorExecutionSlice.actions;
+export const {resetVerification, resetSubmitState, setJanitorSettings} = janitorExecutionSlice.actions;
 export default janitorExecutionSlice.reducer;

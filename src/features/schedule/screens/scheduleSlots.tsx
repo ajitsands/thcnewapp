@@ -58,6 +58,7 @@ export const ScheduleSlots = ({route}: any) => {
       assignmentId: item.assignment_id,
       slotsDetail: item.slots_detail || item.slots_list,
       selectedDate: data?.date || currentDate,
+      settings: data?.settings,
     });
   };
 

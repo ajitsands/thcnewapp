@@ -233,12 +233,13 @@ export const formatLateDuration = (totalMinutes: number): string => {
 };
 
 /**
- * Evaluates whether current completion is on time or late based strictly on slot end_time.
- * Evaluates against the shift's daily time window (HH:mm).
+ * Evaluates whether current completion is on time or late based on slot end_time and server lateThresholdMinutes.
+ * Late duration is calculated from the scheduled end time once the threshold is exceeded.
  */
 export const evaluateSlotTiming = (
   slot: SlotRuleInfo,
   _targetDate?: string,
+  lateThresholdMinutes: number = 0,
 ): SlotTimingStatus => {
   const hasRule =
     slot.has_rule === 1 ||
@@ -267,7 +268,7 @@ export const evaluateSlotTiming = (
 
   const now = moment();
 
-  // Parse slot times (supports "08:00", "08:00:00", "8:00", etc.)
+  // Parse slot times (supports "08:00", "08:00:00", "hh:mm A", etc.)
   const parsedEnd = moment(endTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'H:m']);
   if (!parsedEnd.isValid()) {
     return {
@@ -290,17 +291,32 @@ export const evaluateSlotTiming = (
     }
   }
 
-  // Case 1: Current time is AFTER the slot's end time -> LATE!
-  // It has to be calculated from the End time: (now - endMoment)
+  const threshold = Math.max(0, Number(lateThresholdMinutes) || 0);
+
+  // Case 1: Current time is AFTER the slot's end time
   if (now.isAfter(endMoment)) {
-    const delayMinutes = Math.max(1, now.diff(endMoment, 'minutes'));
-    const formatted = formatLateDuration(delayMinutes);
+    const diffMinutes = Math.max(1, now.diff(endMoment, 'minutes'));
+
+    // If beyond the allowed threshold/grace period -> LATE!
+    // Delay is strictly calculated from the scheduled End time (diffMinutes)
+    if (diffMinutes > threshold) {
+      const formatted = formatLateDuration(diffMinutes);
+      return {
+        isLate: true,
+        delayMinutes: diffMinutes,
+        statusLabel: `Late by ${formatted}`,
+        badgeColor: '#EF4444',
+        isWithinWindow: false,
+      };
+    }
+
+    // Within the allowed threshold / grace period -> On Time
     return {
-      isLate: true,
-      delayMinutes,
-      statusLabel: `Late by ${formatted}`,
-      badgeColor: '#EF4444',
-      isWithinWindow: false,
+      isLate: false,
+      delayMinutes: 0,
+      statusLabel: threshold > 0 ? `On Time (Within ${threshold}m Threshold)` : 'On Time',
+      badgeColor: '#10B981',
+      isWithinWindow: true,
     };
   }
 

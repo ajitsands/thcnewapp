@@ -22,6 +22,7 @@ import {
   getCustomerCareContact,
   resetCustomerCareStatus,
 } from '../../store/reducers/customerCare';
+import {getJanitorSettings} from '../../store/reducers/janitorExecutionReducer';
 import {ApiUrl} from '../../network/endpoints';
 import {useToast} from 'react-native-toast-notifications';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -56,6 +57,7 @@ export const JanitorDashboard = () => {
     'Janitor';
 
   useEffect(() => {
+    dispatch(getJanitorSettings());
     if (!empName && apiKey && employeeCode) {
       dispatch(
         getProfileDetails({
@@ -65,7 +67,7 @@ export const JanitorDashboard = () => {
         }),
       );
     }
-  }, [empName, apiKey, employeeCode]);
+  }, [empName, apiKey, employeeCode, dispatch]);
 
   const handleCallPress = async () => {
     try {

@@ -60,11 +60,18 @@ export const JanitorChecklistScreen = () => {
     scanLng,
     assetLat,
     assetLng,
+    settings: routeSettings,
   } = route.params || {};
 
-  const {checklistLoading, checklistData, submitLoading, submitSuccess, submitError} =
+  const {checklistLoading, checklistData, submitLoading, submitSuccess, submitError, settings: reduxSettings} =
     useAppSelector(state => state.janitorExecution);
   const {apiKey, employeeCode, employeeId} = useAppSelector(state => state.app);
+
+  const activeSettings = routeSettings || reduxSettings || {};
+  const lateThresholdMinutes =
+    Number(activeSettings?.late_time_minutes) >= 0
+      ? Number(activeSettings.late_time_minutes)
+      : 15;
 
   // Parse Slots
   let parsedSlots: SlotRuleInfo[] = [];
@@ -89,8 +96,8 @@ export const JanitorChecklistScreen = () => {
     has_rule: 1,
   };
 
-  // Evaluate timing for current slot
-  const slotTiming = evaluateSlotTiming(activeSlot, selectedDate);
+  // Evaluate timing for current slot with server threshold
+  const slotTiming = evaluateSlotTiming(activeSlot, selectedDate, lateThresholdMinutes);
 
   // Checklist Items State: key is item_id
   const [itemsState, setItemsState] = useState<Record<string, ChecklistItemState>>({});
@@ -249,14 +256,14 @@ export const JanitorChecklistScreen = () => {
     if (isLate) {
       const lateDurationFormatted = formatLateDuration(delayMinutes);
       executionStatus = `Completed (Late by ${lateDurationFormatted})`;
-      const lateNote = `[LATE EXECUTION: Completed ${lateDurationFormatted} after scheduled end time (${activeSlot.end_time})]`;
+      const lateNote = `[LATE EXECUTION: Completed ${lateDurationFormatted} after scheduled end time (${activeSlot.end_time}, threshold: ${lateThresholdMinutes}m)]`;
       finalRemarks = generalRemarks ? `${lateNote} ${generalRemarks}` : lateNote;
     }
 
     Alert.alert(
       'Confirm Submission',
       isLate
-        ? `⚠️ This task is being completed LATE by ${formatLateDuration(delayMinutes)} (Scheduled end: ${activeSlot.end_time}). It will be marked as Late.\n\nProceed with submission?`
+        ? `⚠️ This task is being completed LATE by ${formatLateDuration(delayMinutes)} (Scheduled end: ${activeSlot.end_time}, Allowed threshold: ${lateThresholdMinutes} mins).\n\nProceed with submission?`
         : `Submit completed checklist for ${activeSlotName}?`,
       [
         {text: 'Cancel', style: 'cancel'},

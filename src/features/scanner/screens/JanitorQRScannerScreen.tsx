@@ -15,18 +15,33 @@ import {FontFamily} from '../../../themes/fonts';
 import {scaleFont, screenWidth} from '../../../utils/helper';
 import {useIsFocused, useNavigation, useRoute} from '@react-navigation/native';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
-import {useAppDispatch} from '../../../store';
-import {verifyAssetAndLocation} from '../../../store/reducers/janitorExecutionReducer';
+import {useAppDispatch, useAppSelector} from '../../../store';
+import {verifyAssetAndLocation, getJanitorSettings} from '../../../store/reducers/janitorExecutionReducer';
 import {calculateDistanceMeters, getCurrentLocation, formatDistance} from '../../../utils/geoHelper';
 
 const frameSize = 260;
-const MAX_ALLOWED_DISTANCE_METERS = 10;
 
 export const JanitorQRScannerScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const dispatch = useAppDispatch();
   const isFocused = useIsFocused();
+
+  const reduxSettings = useAppSelector((state: any) => state?.janitorExecution?.settings);
+  const activeSettings = route.params?.settings || reduxSettings || {};
+
+  const minRadiusMeters =
+    Number(activeSettings?.min_radius_meters) > 0
+      ? Number(activeSettings.min_radius_meters)
+      : 50;
+
+  const allowGpsBypass =
+    String(activeSettings?.allow_gps_bypass || 'NO').toUpperCase() === 'YES';
+
+  const lateThresholdMinutes =
+    Number(activeSettings?.late_time_minutes) >= 0
+      ? Number(activeSettings.late_time_minutes)
+      : 15;
 
   const {
     assignment,
@@ -56,6 +71,13 @@ export const JanitorQRScannerScreen = () => {
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorTitle, setErrorTitle] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Fetch settings from server on mount if not provided in params
+  React.useEffect(() => {
+    if (!route.params?.settings) {
+      dispatch(getJanitorSettings());
+    }
+  }, [route.params?.settings, dispatch]);
 
   const onReadCode = async (event: any) => {
     if (hasScanned || isVerifying) {
@@ -172,6 +194,7 @@ export const JanitorQRScannerScreen = () => {
         longitude: currentLng,
         asset_latitude: targetLat,
         asset_longitude: targetLng,
+        allowed_radius_meters: minRadiusMeters,
         assignment_id: assignmentId || assignment?.assignment_id,
       }),
     );
@@ -189,7 +212,7 @@ export const JanitorQRScannerScreen = () => {
       const isMismatch =
         errorText.toUpperCase().includes('LOCATION MISMATCH') ||
         errorText.includes('Mismatch') ||
-        distance > 200;
+        distance > minRadiusMeters;
 
       setIsLocationMismatch(isMismatch);
       setIsGpsError(false);
@@ -198,7 +221,11 @@ export const JanitorQRScannerScreen = () => {
         isMismatch
           ? `Your scanned location is ${formatDistance(
               distance,
-            )} away from this asset (${assignment?.building_name || 'Assigned Building'}).\n\nYour scan location has been pushed and logged on the server as Location Mismatch.\n\nTap "TEST MODE: PROCEED ANYWAY" below to test the checklist.`
+            )} away from this asset (${assignment?.building_name || 'Assigned Building'}).\n\nAllowed rule: Must be within ${minRadiusMeters} meters.${
+              allowGpsBypass
+                ? '\n\nTap "TEST MODE: PROCEED ANYWAY" below to test the checklist.'
+                : '\n\nGPS test bypass is disabled in Janitor Settings. Please move within ' + minRadiusMeters + 'm to proceed.'
+            }`
           : errorText,
       );
       setErrorModalVisible(true);
@@ -220,6 +247,7 @@ export const JanitorQRScannerScreen = () => {
       scanLng: currentLng,
       assetLat: targetLat,
       assetLng: targetLng,
+      settings: activeSettings,
     });
   };
 
@@ -282,6 +310,7 @@ export const JanitorQRScannerScreen = () => {
         scanLng: actualLng,
         assetLat: targetLat,
         assetLng: targetLng,
+        settings: activeSettings,
       });
     }
   };
@@ -355,18 +384,20 @@ export const JanitorQRScannerScreen = () => {
             Align the QR code on the toilet/asset inside the frame
           </Text>
           <Text style={styles.precisionHint}>
-            📍 High-precision GPS verification required (within 10m)
+            📍 High-precision GPS verification required (within {minRadiusMeters}m)
           </Text>
 
-          {/* Test Shortcut */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.directTestShortcut}
-            onPress={handleBypassLocation}>
-            <Text style={styles.directTestShortcutText}>
-              ⚡ Testing? Tap here to open checklist directly
-            </Text>
-          </TouchableOpacity>
+          {/* Test Shortcut - Only shown if GPS Test Bypass is enabled in Admin Settings */}
+          {allowGpsBypass && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.directTestShortcut}
+              onPress={handleBypassLocation}>
+              <Text style={styles.directTestShortcutText}>
+                ⚡ Testing? Tap here to open checklist directly
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -400,8 +431,8 @@ export const JanitorQRScannerScreen = () => {
               <Text style={styles.retryButtonText}>TRY AGAIN</Text>
             </TouchableOpacity>
 
-            {/* Test Mode Bypass Button */}
-            {(isLocationMismatch || isGpsError) && (
+            {/* Test Mode Bypass Button - Only allowed if enabled by Admin */}
+            {(isLocationMismatch || isGpsError) && allowGpsBypass && (
               <TouchableOpacity
                 activeOpacity={0.85}
                 style={styles.bypassButton}
