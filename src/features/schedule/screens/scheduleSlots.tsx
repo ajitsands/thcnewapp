@@ -170,7 +170,6 @@ export const ScheduleSlots = ({route}: any) => {
                         <Text style={styles.slotsHeaderTitle}>Time Slots & Schedule Window:</Text>
                         <View style={styles.slotsPillsRow}>
                           {slotsList.map((s: any, sIdx: number) => {
-                            const isDone = s.is_completed === 'Yes' || s.execution_status === 'Completed';
                             const lateThreshold = Number(data?.settings?.late_time_minutes) >= 0 ? Number(data.settings.late_time_minutes) : 15;
                             const timing = evaluateSlotTiming(s, data?.date || currentDate, lateThreshold);
                             const slotLabel = s.slot_name || s.name || s.slot_time || `Slot ${sIdx + 1}`;
@@ -180,55 +179,66 @@ export const ScheduleSlots = ({route}: any) => {
                               ? s.time_rule
                               : '';
 
-                            const slotStatusText = isDone
-                              ? 'Completed'
-                              : timing.isLate
-                              ? `Late by ${formatLateDuration(timing.delayMinutes)}`
-                              : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                              ? 'Pending (On Time)'
-                              : 'Pending';
+                            const isExecuted = s.is_completed === 'Yes' || (s.execution_status && s.execution_status !== 'Pending');
+                            const execStatus = s.execution_status || (s.is_completed === 'Yes' ? 'Completed' : 'Pending');
+                            const isPartial = execStatus.toLowerCase().includes('partial');
+                            const isLateExecuted = execStatus.toLowerCase().includes('late') || (isExecuted && timing.isLate);
+                            const formattedLateTime = formatLateDuration(timing.delayMinutes);
+
+                            let pillStyle = styles.slotPillPending;
+                            let iconName = 'schedule';
+                            let iconColor = colors.primary;
+                            let textStyle = styles.slotPillTextPending;
+                            let slotStatusText = 'Pending';
+
+                            if (isExecuted) {
+                              if (isPartial) {
+                                pillStyle = isLateExecuted ? styles.slotPillLate : styles.slotPillPartial;
+                                iconName = isLateExecuted ? 'alarm-on' : 'warning';
+                                iconColor = isLateExecuted ? '#DC2626' : '#D97706';
+                                textStyle = isLateExecuted ? styles.slotPillTextLate : styles.slotPillTextPartial;
+                                slotStatusText = isLateExecuted
+                                  ? (execStatus.includes('Late') ? execStatus : `Partially Completed (Late by ${formattedLateTime})`)
+                                  : 'Partially Completed (On Time)';
+                              } else if (isLateExecuted) {
+                                pillStyle = styles.slotPillLate;
+                                iconName = 'alarm-on';
+                                iconColor = '#DC2626';
+                                textStyle = styles.slotPillTextLate;
+                                slotStatusText = execStatus.includes('Late') ? execStatus : `Completed (Late by ${formattedLateTime})`;
+                              } else {
+                                pillStyle = styles.slotPillDone;
+                                iconName = 'check-circle';
+                                iconColor = '#059669';
+                                textStyle = styles.slotPillTextDone;
+                                slotStatusText = 'Completed (On Time)';
+                              }
+                            } else {
+                              if (timing.isLate) {
+                                pillStyle = styles.slotPillLate;
+                                iconName = 'alarm-on';
+                                iconColor = '#DC2626';
+                                textStyle = styles.slotPillTextLate;
+                                slotStatusText = `Pending (Late by ${formattedLateTime})`;
+                              } else if (timing.isWithinWindow) {
+                                pillStyle = styles.slotPillDone;
+                                iconName = 'check-circle';
+                                iconColor = '#059669';
+                                textStyle = styles.slotPillTextDone;
+                                slotStatusText = 'Pending (On Time)';
+                              } else {
+                                pillStyle = styles.slotPillPending;
+                                iconName = 'schedule';
+                                iconColor = colors.primary;
+                                textStyle = styles.slotPillTextPending;
+                                slotStatusText = 'Pending';
+                              }
+                            }
 
                             return (
-                              <View
-                                key={sIdx}
-                                style={[
-                                  styles.slotPill,
-                                  isDone
-                                    ? styles.slotPillDone
-                                    : timing.isLate
-                                    ? styles.slotPillLate
-                                    : styles.slotPillPending,
-                                ]}>
-                                <MaterialIcons
-                                  name={
-                                    isDone
-                                      ? 'check-circle'
-                                      : timing.isLate
-                                      ? 'alarm-on'
-                                      : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                                      ? 'check-circle'
-                                      : 'schedule'
-                                  }
-                                  size={13}
-                                  color={
-                                    isDone
-                                      ? '#059669'
-                                      : timing.isLate
-                                      ? '#DC2626'
-                                      : timing.isWithinWindow && s.start_time && s.start_time !== '0'
-                                      ? '#059669'
-                                      : colors.primary
-                                  }
-                                />
-                                <Text
-                                  style={[
-                                    styles.slotPillText,
-                                    isDone
-                                      ? styles.slotPillTextDone
-                                      : timing.isLate
-                                      ? styles.slotPillTextLate
-                                      : styles.slotPillTextPending,
-                                  ]}>
+                              <View key={sIdx} style={[styles.slotPill, pillStyle]}>
+                                <MaterialIcons name={iconName as any} size={13} color={iconColor} />
+                                <Text style={[styles.slotPillText, textStyle]}>
                                   {slotLabel} {timeRuleText ? `(${timeRuleText})` : ''} - {slotStatusText}
                                 </Text>
                               </View>
@@ -567,6 +577,14 @@ const styles = StyleSheet.create({
   },
   slotPillTextLate: {
     color: '#B91C1C',
+    fontFamily: FontFamily.bold,
+  },
+  slotPillPartial: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  slotPillTextPartial: {
+    color: '#B45309',
     fontFamily: FontFamily.bold,
   },
   assetInteractiveCard: {

@@ -323,6 +323,34 @@ export const getJanitorSettings = createAsyncThunk(
   },
 );
 
+/**
+ * Endpoint: Get Execution Points by execution_id
+ */
+export const getExecutionPoints = createAsyncThunk(
+  'janitorExecution/getExecutionPoints',
+  async (params: {execution_id: number | string; APIKEY?: string}, {rejectWithValue, getState}) => {
+    try {
+      const state: any = getState();
+      const appState = state?.app || {};
+      const loginData = state?.userLogin?.data || {};
+      const apiKey = params?.APIKEY || appState?.apiKey || loginData?.APIKEY || ApiUrl.janitorApiKey;
+
+      const response = await getRequest(ApiUrl.janitorURL, {
+        action: 'get_execution_points',
+        execution_id: params.execution_id,
+        APIKEY: apiKey,
+      });
+
+      if (response?.data?.status === 'Success') {
+        return response.data;
+      }
+      return rejectWithValue(response?.data?.api_message || 'Failed to fetch points');
+    } catch (err: any) {
+      return rejectWithValue(err?.message || 'Error fetching points');
+    }
+  },
+);
+
 const janitorExecutionSlice = createSlice({
   name: 'janitorExecution',
   initialState,

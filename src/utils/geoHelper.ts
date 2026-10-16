@@ -249,14 +249,47 @@ export const evaluateSlotTiming = (
   let startTimeStr = slot.start_time;
   let endTimeStr = slot.end_time;
 
-  // Fallback: If no explicit start/end time, extract time range from text (e.g. "Slot 1 (08:00 - 11:55)")
-  if (!endTimeStr || endTimeStr === '0' || endTimeStr.trim() === '') {
-    const textToSearch = `${slot.slot_time || ''} ${slot.time_rule || ''} ${slot.name || ''}`;
-    const rangeMatch = textToSearch.match(/(\d{1,2}:\d{2})\s*[-–to]+\s*(\d{1,2}:\d{2})/i);
+  // Fallback: If no explicit start/end time, extract time range from text or detect standard slot numbers
+  if (!endTimeStr || endTimeStr === '0' || endTimeStr.trim() === '' || endTimeStr.toLowerCase() === 'no rule') {
+    const textToSearch = `${slot.slot_time || ''} ${slot.time_rule || ''} ${slot.name || ''} ${slot.slot_name || ''}`;
+    const rangeMatch = textToSearch.match(/(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)\s*[-–to]+\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)/i);
     if (rangeMatch) {
       startTimeStr = rangeMatch[1].trim();
       endTimeStr = rangeMatch[2].trim();
       hasRule = true;
+    } else if (/slot\s*1\b|^1$/i.test(textToSearch) || /morning/i.test(textToSearch)) {
+      startTimeStr = '08:00';
+      endTimeStr = '12:00';
+      hasRule = true;
+    } else if (/slot\s*2\b|^2$/i.test(textToSearch) || /afternoon/i.test(textToSearch)) {
+      startTimeStr = '12:00';
+      endTimeStr = '16:00';
+      hasRule = true;
+    } else if (/slot\s*3\b|^3$/i.test(textToSearch) || /evening/i.test(textToSearch)) {
+      startTimeStr = '16:00';
+      endTimeStr = '20:00';
+      hasRule = true;
+    } else if (/slot\s*4\b|^4$/i.test(textToSearch) || /night/i.test(textToSearch)) {
+      startTimeStr = '20:00';
+      endTimeStr = '23:59';
+      hasRule = true;
+    } else {
+      const numMatch = textToSearch.match(/slot\s*(\d+)/i);
+      if (numMatch) {
+        const slotNum = parseInt(numMatch[1], 10);
+        if (slotNum >= 1 && slotNum <= 24) {
+          const startH = 7 + slotNum;
+          const endH = startH + 1;
+          startTimeStr = `${String(Math.min(23, startH)).padStart(2, '0')}:00`;
+          endTimeStr = `${String(Math.min(23, endH)).padStart(2, '0')}:00`;
+          hasRule = true;
+        }
+      } else {
+        // Fallback default: If slot is present, assign standard window
+        startTimeStr = '08:00';
+        endTimeStr = '12:00';
+        hasRule = true;
+      }
     }
   }
 
@@ -279,8 +312,8 @@ export const evaluateSlotTiming = (
 
   const now = moment();
 
-  // Parse slot times (supports "08:00", "08:00:00", "hh:mm A", etc.)
-  const parsedEnd = moment(endTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'H:m']);
+  // Parse slot times (supports "08:00", "08:00:00", "hh:mm A", "h:mm A", "h A", etc.)
+  const parsedEnd = moment(endTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'h:mm A', 'h A', 'H:m']);
   if (!parsedEnd.isValid()) {
     return {
       isLate: false,
@@ -323,7 +356,7 @@ export const evaluateSlotTiming = (
 
   let startMoment = endMoment.clone().subtract(1, 'hour');
   if (startTimeStr && startTimeStr !== '0' && startTimeStr.trim() !== '') {
-    const parsedStart = moment(startTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'H:m']);
+    const parsedStart = moment(startTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'h:mm A', 'h A', 'H:m']);
     if (parsedStart.isValid()) {
       startMoment = baseDate.clone().hour(parsedStart.hour()).minute(parsedStart.minute()).second(0).millisecond(0);
     }

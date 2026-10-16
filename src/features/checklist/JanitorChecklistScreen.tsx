@@ -22,6 +22,7 @@ import {
   uploadExecutionPhoto,
   submitChecklistExecution,
   resetSubmitState,
+  getExecutionPoints,
 } from '../../store/reducers/janitorExecutionReducer';
 import {getScheduleSlots} from '../../store/reducers/getSlots';
 import {
@@ -35,6 +36,7 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {useToast} from 'react-native-toast-notifications';
 import {launchCamera} from 'react-native-image-picker';
 import moment from 'moment';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ChecklistItemState {
   item_id: string | number;
@@ -75,17 +77,36 @@ export const JanitorChecklistScreen = () => {
       : 15;
 
   // Parse Slots
-  let parsedSlots: SlotRuleInfo[] = [];
+  let parsedSlots: any[] = [];
   try {
-    if (typeof slotsDetail === 'string' && slotsDetail.startsWith('[')) {
-      parsedSlots = JSON.parse(slotsDetail);
+    if (typeof slotsDetail === 'string') {
+      if (slotsDetail.trim().startsWith('[')) {
+        parsedSlots = JSON.parse(slotsDetail);
+      } else {
+        parsedSlots = slotsDetail
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map(s => ({name: s, slot_name: s, slot_time: s, has_rule: 1}));
+      }
     } else if (Array.isArray(slotsDetail)) {
       parsedSlots = slotsDetail;
     } else if (Array.isArray(assignment?.slots_list)) {
       parsedSlots = assignment.slots_list;
+    } else if (typeof assignment?.slots === 'string') {
+      parsedSlots = assignment.slots
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .map((s: string) => ({name: s, slot_name: s, slot_time: s, has_rule: 1}));
     }
   } catch (e) {
     parsedSlots = [];
+  }
+  if (!parsedSlots || parsedSlots.length === 0) {
+    parsedSlots = [
+      {name: 'Slot 1', slot_name: 'Slot 1', slot_time: 'Slot 1', start_time: '08:00', end_time: '12:00', has_rule: 1},
+    ];
   }
 
   // Helper to extract a consistent slot key
@@ -93,13 +114,47 @@ export const JanitorChecklistScreen = () => {
     return String(s?.name || s?.slot_name || s?.slot_time || `Slot ${idx + 1}`).trim();
   };
 
+  const getStorageKey = (sKey: string) => {
+    const aId = assignmentId || assignment?.assignment_id || assignment?.id || '0';
+    const dt = selectedDate || moment().format('YYYY-MM-DD');
+    return `@thc_janitor_slot_points_${aId}_${dt}_${sKey}`;
+  };
+
   // Active Selected Slot
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
-  const activeSlot = parsedSlots[selectedSlotIndex] || {
+  const rawActiveSlot: any = parsedSlots[selectedSlotIndex] || parsedSlots[0] || {
     name: 'Slot 1',
     start_time: '08:00',
-    end_time: '11:55',
+    end_time: '12:00',
     has_rule: 1,
+  };
+
+  // Standard slot timing fallback windows if not explicitly provided
+  const totalSlotsCount = parsedSlots.length || 1;
+  let defStart = '08:00';
+  let defEnd = '12:00';
+
+  if (totalSlotsCount === 1) {
+    defStart = '08:00';
+    defEnd = '18:00';
+  } else if (totalSlotsCount === 2) {
+    defStart = selectedSlotIndex === 0 ? '08:00' : '14:00';
+    defEnd = selectedSlotIndex === 0 ? '14:00' : '20:00';
+  } else if (totalSlotsCount === 3) {
+    defStart = selectedSlotIndex === 0 ? '08:00' : selectedSlotIndex === 1 ? '12:00' : '16:00';
+    defEnd = selectedSlotIndex === 0 ? '12:00' : selectedSlotIndex === 1 ? '16:00' : '20:00';
+  } else {
+    const startH = 8 + selectedSlotIndex * 2;
+    const endH = startH + 2;
+    defStart = `${String(Math.min(22, startH)).padStart(2, '0')}:00`;
+    defEnd = `${String(Math.min(23, endH)).padStart(2, '0')}:00`;
+  }
+
+  const activeSlot = {
+    ...rawActiveSlot,
+    start_time: rawActiveSlot.start_time && rawActiveSlot.start_time !== '0' ? rawActiveSlot.start_time : defStart,
+    end_time: rawActiveSlot.end_time && rawActiveSlot.end_time !== '0' ? rawActiveSlot.end_time : defEnd,
+    has_rule: rawActiveSlot.has_rule !== undefined ? rawActiveSlot.has_rule : 1,
   };
 
   const activeSlotKey = getSlotKey(activeSlot, selectedSlotIndex);
@@ -117,7 +172,29 @@ export const JanitorChecklistScreen = () => {
 
   const currentSlotItems = slotStates[activeSlotKey] || {};
   const activeSlotExecution = slotExecutions[activeSlotKey] || null;
-  const isSlotExecuted = Boolean(activeSlotExecution?.execution_id);
+  const isSlotExecuted = Boolean(
+    activeSlotExecution?.execution_id ||
+    activeSlot?.is_completed === 'Yes' ||
+    (activeSlot?.execution_status && activeSlot.execution_status !== 'Pending')
+  );
+  const isExecutionPartial = Boolean(
+    activeSlotExecution?.status?.toLowerCase().includes('partial') ||
+    activeSlot?.execution_status?.toLowerCase().includes('partial')
+  );
+  const isLateStatus = Boolean(
+    activeSlotExecution?.status?.toLowerCase().includes('late') ||
+    activeSlot?.execution_status?.toLowerCase().includes('late')
+  );
+  const isEffectivelyLate = isLateStatus || (isSlotExecuted && slotTiming.isLate) || (!isSlotExecuted && slotTiming.isLate);
+  const lateDelayFormatted = formatLateDuration(slotTiming.delayMinutes);
+
+  const persistSlotPointsLocally = async (slotKey: string, pointsMap: Record<string, ChecklistItemState>) => {
+    try {
+      await AsyncStorage.setItem(getStorageKey(slotKey), JSON.stringify(pointsMap));
+    } catch (e) {
+      console.log('[persistSlotPointsLocally] Error:', e);
+    }
+  };
 
   // Fetch checklist items and saved executions on mount
   useEffect(() => {
@@ -130,6 +207,54 @@ export const JanitorChecklistScreen = () => {
     );
   }, [checklistId, assignmentId, assignment?.checklist_id, assignment?.assignment_id, selectedDate, dispatch]);
 
+  // Active Slot Point Loader: whenever selectedSlotIndex changes, restore points
+  useEffect(() => {
+    if (!activeSlotKey) return;
+    (async () => {
+      // 1. Check server points from executions_by_slot
+      const executionsBySlot = checklistData?.executions_by_slot || {};
+      const exec = executionsBySlot[activeSlotKey];
+      if (exec?.points && Object.keys(exec.points).length > 0) {
+        setSlotStates(prev => ({
+          ...prev,
+          [activeSlotKey]: exec.points,
+        }));
+        return;
+      }
+
+      // 2. Check AsyncStorage for local cached points
+      try {
+        const raw = await AsyncStorage.getItem(getStorageKey(activeSlotKey));
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (cached && Object.keys(cached).length > 0) {
+            setSlotStates(prev => ({
+              ...prev,
+              [activeSlotKey]: cached,
+            }));
+            return;
+          }
+        }
+      } catch (e) {}
+
+      // 3. Fallback: if slot was executed on server, fetch directly via execution_id
+      const s: any = parsedSlots[selectedSlotIndex];
+      const execId = s?.execution_id || activeSlotExecution?.execution_id;
+      if (execId) {
+        try {
+          const res: any = await dispatch(getExecutionPoints({execution_id: execId}));
+          if (res?.payload?.points && Object.keys(res.payload.points).length > 0) {
+            setSlotStates(prev => ({
+              ...prev,
+              [activeSlotKey]: res.payload.points,
+            }));
+            persistSlotPointsLocally(activeSlotKey, res.payload.points);
+          }
+        } catch (e) {}
+      }
+    })();
+  }, [selectedSlotIndex, activeSlotKey, checklistData]);
+
   // Initialize per-slot checklist items and previous executions when data arrives
   useEffect(() => {
     if (Array.isArray(checklistData?.data)) {
@@ -139,7 +264,7 @@ export const JanitorChecklistScreen = () => {
       // Populate slot executions
       setSlotExecutions(prev => {
         const nextExecs = {...prev};
-        parsedSlots.forEach((s, idx) => {
+        parsedSlots.forEach((s: any, idx: number) => {
           const sKey = getSlotKey(s, idx);
           if (executionsBySlot[sKey]) {
             nextExecs[sKey] = executionsBySlot[sKey];
@@ -155,50 +280,80 @@ export const JanitorChecklistScreen = () => {
         return nextExecs;
       });
 
-      // Populate per-slot items state
-      setSlotStates(prev => {
-        const nextStates: Record<string, Record<string, ChecklistItemState>> = {...prev};
+      // Load points: Server returned points -> AsyncStorage cached points -> API getExecutionPoints -> Default fresh
+      (async () => {
+        const nextStates: Record<string, Record<string, ChecklistItemState>> = {};
 
-        parsedSlots.forEach((s, idx) => {
+        for (let idx = 0; idx < parsedSlots.length; idx++) {
+          const s: any = parsedSlots[idx];
           const sKey = getSlotKey(s, idx);
           const exec = executionsBySlot[sKey];
+          nextStates[sKey] = {};
 
-          if (!nextStates[sKey]) {
-            nextStates[sKey] = {};
+          // Check AsyncStorage for local cached points
+          let localPoints: Record<string, any> = {};
+          try {
+            const raw = await AsyncStorage.getItem(getStorageKey(sKey));
+            if (raw) {
+              localPoints = JSON.parse(raw);
+            }
+          } catch (e) {}
+
+          // Fallback: If slot was executed on server with execution_id but no points received yet, fetch directly
+          if (
+            s.execution_id &&
+            (!exec?.points || Object.keys(exec.points).length === 0) &&
+            Object.keys(localPoints).length === 0
+          ) {
+            try {
+              const res: any = await dispatch(getExecutionPoints({execution_id: s.execution_id}));
+              if (res?.payload?.points) {
+                localPoints = res.payload.points;
+              }
+            } catch (e) {}
           }
 
           categoriesList.forEach((cat: any) => {
             if (Array.isArray(cat?.items)) {
               cat.items.forEach((item: any) => {
                 const id = String(item.item_id || item.id);
-                // If this slot was already executed on this date, load executed point
+                const desc = item.item_description || item.name || '';
+
                 if (exec?.points && exec.points[id]) {
+                  // 1. Server execution points
                   nextStates[sKey][id] = {
                     item_id: id,
-                    item_description: item.item_description || item.name || '',
+                    item_description: desc,
                     is_completed: exec.points[id].is_completed === 'No' ? 'No' : 'Yes',
                     remarks: exec.points[id].remarks || '',
                     photo_url: exec.points[id].photo_url || '',
                   };
-                } else if (!nextStates[sKey][id]) {
-                  // Default fresh items for this slot
+                } else if (localPoints[id]) {
+                  // 2. Local saved points
                   nextStates[sKey][id] = {
                     item_id: id,
-                    item_description: item.item_description || item.name || '',
+                    item_description: desc,
+                    is_completed: localPoints[id].is_completed === 'No' ? 'No' : 'Yes',
+                    remarks: localPoints[id].remarks || '',
+                    photo_url: localPoints[id].photo_url || '',
+                  };
+                } else {
+                  // 3. Default fresh state
+                  nextStates[sKey][id] = {
+                    item_id: id,
+                    item_description: desc,
                     is_completed: 'Yes',
                     remarks: '',
                     photo_url: '',
                   };
-                } else if (!nextStates[sKey][id].item_description) {
-                  nextStates[sKey][id].item_description = item.item_description || item.name || '';
                 }
               });
             }
           });
-        });
+        }
 
-        return nextStates;
-      });
+        setSlotStates(nextStates);
+      })();
     }
   }, [checklistData, parsedSlots]);
 
@@ -257,20 +412,22 @@ export const JanitorChecklistScreen = () => {
         remarks: '',
         photo_url: '',
       };
-      // If clicking currently active status, toggle to other status; otherwise set to clicked status
-      const nextStatus = existing.is_completed === status
-        ? (status === 'Yes' ? 'No' : 'Yes')
-        : status;
+      // Explicitly set to clicked status
+      const nextStatus = status;
+
+      const updatedSlotMap = {
+        ...currentSlotMap,
+        [itemId]: {
+          ...existing,
+          is_completed: nextStatus,
+        },
+      };
+
+      persistSlotPointsLocally(activeSlotKey, updatedSlotMap);
 
       return {
         ...prev,
-        [activeSlotKey]: {
-          ...currentSlotMap,
-          [itemId]: {
-            ...existing,
-            is_completed: nextStatus,
-          },
-        },
+        [activeSlotKey]: updatedSlotMap,
       };
     });
   };
@@ -285,15 +442,19 @@ export const JanitorChecklistScreen = () => {
         remarks: '',
         photo_url: '',
       };
+      const updatedSlotMap = {
+        ...currentSlotMap,
+        [itemId]: {
+          ...existing,
+          remarks: text,
+        },
+      };
+
+      persistSlotPointsLocally(activeSlotKey, updatedSlotMap);
+
       return {
         ...prev,
-        [activeSlotKey]: {
-          ...currentSlotMap,
-          [itemId]: {
-            ...existing,
-            remarks: text,
-          },
-        },
+        [activeSlotKey]: updatedSlotMap,
       };
     });
   };
@@ -332,15 +493,19 @@ export const JanitorChecklistScreen = () => {
             remarks: '',
             photo_url: '',
           };
+          const updatedSlotMap = {
+            ...currentSlotMap,
+            [itemId]: {
+              ...existing,
+              photo_url: uploadRes.payload,
+            },
+          };
+
+          persistSlotPointsLocally(activeSlotKey, updatedSlotMap);
+
           return {
             ...prev,
-            [activeSlotKey]: {
-              ...currentSlotMap,
-              [itemId]: {
-                ...existing,
-                photo_url: uploadRes.payload,
-              },
-            },
+            [activeSlotKey]: updatedSlotMap,
           };
         });
         toast.show('Proof photo attached!', {type: 'success'});
@@ -420,6 +585,19 @@ export const JanitorChecklistScreen = () => {
           text: 'Submit Now',
           style: 'default',
           onPress: async () => {
+            // Persist points locally immediately
+            persistSlotPointsLocally(activeSlotKey, currentSlotMap);
+            setSlotExecutions(prev => ({
+              ...prev,
+              [activeSlotKey]: {
+                execution_id: 1,
+                status: executionStatus,
+                remarks: finalRemarks,
+                executed_at: moment().format('YYYY-MM-DD HH:mm:ss'),
+                points: currentSlotMap,
+              },
+            }));
+
             let submitScanLat = scanLat;
             let submitScanLng = scanLng;
             let submitAssetLat = assetLat || assignment?.latitude || assignment?.building_latitude;
@@ -483,7 +661,10 @@ export const JanitorChecklistScreen = () => {
       });
     }
   });
-  const isActiveSlotAllDone = activeSlotIssuesCount === 0 && activeSlotTotalCount > 0;
+
+  const isActiveSlotAllDone = isSlotExecuted
+    ? (!isExecutionPartial && activeSlotIssuesCount === 0)
+    : (activeSlotIssuesCount === 0 && activeSlotTotalCount > 0);
 
   return (
     <View style={styles.container}>
@@ -518,13 +699,47 @@ export const JanitorChecklistScreen = () => {
           <View style={styles.slotHeaderRow}>
             <Text style={styles.cardSectionTitle}>Assigned Time Slot</Text>
             {/* Late / On-time Indicator Badge */}
-            <View style={[styles.timingBadge, {backgroundColor: slotTiming.badgeColor}]}>
+            <View
+              style={[
+                styles.timingBadge,
+                {
+                  backgroundColor: isSlotExecuted
+                    ? isEffectivelyLate
+                      ? '#DC2626'
+                      : isExecutionPartial
+                      ? '#D97706'
+                      : '#059669'
+                    : slotTiming.isLate
+                    ? '#DC2626'
+                    : slotTiming.badgeColor,
+                },
+              ]}>
               <MaterialIcons
-                name={slotTiming.isLate ? 'alarm' : 'check-circle'}
+                name={
+                  isSlotExecuted
+                    ? isEffectivelyLate
+                      ? 'alarm'
+                      : isExecutionPartial
+                      ? 'warning'
+                      : 'check-circle'
+                    : slotTiming.isLate
+                    ? 'alarm'
+                    : 'check-circle'
+                }
                 size={14}
                 color={colors.white}
               />
-              <Text style={styles.timingBadgeText}>{slotTiming.statusLabel}</Text>
+              <Text style={styles.timingBadgeText}>
+                {isSlotExecuted
+                  ? isExecutionPartial
+                    ? isEffectivelyLate
+                      ? `Partially Completed (Late by ${lateDelayFormatted})`
+                      : 'Partially Completed (On Time)'
+                    : isEffectivelyLate
+                    ? `Completed (Late by ${lateDelayFormatted})`
+                    : 'Completed (On Time)'
+                  : slotTiming.statusLabel}
+              </Text>
             </View>
           </View>
 
@@ -533,14 +748,32 @@ export const JanitorChecklistScreen = () => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.slotPillRow}>
               {parsedSlots.map((s, idx) => {
                 const isSelected = selectedSlotIndex === idx;
-                const slotLabel = s.name || s.slot_name || `Slot ${idx + 1}`;
+                const slotLabel = s.name || s.slot_name || s.slot_time || `Slot ${idx + 1}`;
                 const slotKey = getSlotKey(s, idx);
                 const exec = slotExecutions[slotKey];
-                const isCompleted = exec?.status?.includes('Completed') && !exec?.status?.includes('Partially');
-                const isPartial = exec?.status?.includes('Partially');
+                const pillTiming = evaluateSlotTiming(s, selectedDate, lateThresholdMinutes);
+                const isExec = s.is_completed === 'Yes' || Boolean(exec?.execution_id) || (exec?.status && exec.status !== 'Pending');
+                const st = exec?.status || s.execution_status || '';
+                const isPartial = st.toLowerCase().includes('partial');
+                const isLateSlot = st.toLowerCase().includes('late') || (isExec && pillTiming.isLate) || (!isExec && pillTiming.isLate);
                 const timeRule = s.start_time && s.end_time && s.end_time !== '0'
                   ? `${s.start_time} - ${s.end_time}`
                   : 'Flexible';
+
+                let statusBadgeText = timeRule;
+                if (isExec) {
+                  if (isPartial && isLateSlot) {
+                    statusBadgeText = 'Partial (Late) ⚠️';
+                  } else if (isPartial) {
+                    statusBadgeText = 'Partial ⚠️';
+                  } else if (isLateSlot) {
+                    statusBadgeText = 'Done (Late) ⏰';
+                  } else {
+                    statusBadgeText = 'Done ✓';
+                  }
+                } else if (pillTiming.isLate) {
+                  statusBadgeText = `Late ⏰ (${formatLateDuration(pillTiming.delayMinutes)})`;
+                }
 
                 return (
                   <TouchableOpacity
@@ -549,26 +782,31 @@ export const JanitorChecklistScreen = () => {
                     style={[
                       styles.slotPill,
                       isSelected && styles.slotPillActive,
-                      isCompleted && !isSelected && styles.slotPillDoneBorder,
-                      isPartial && !isSelected && styles.slotPillPartialBorder,
+                      isExec && !isPartial && !isSelected && (isLateSlot ? styles.slotPillLateBorder : styles.slotPillDoneBorder),
+                      isExec && isPartial && !isSelected && styles.slotPillPartialBorder,
+                      !isExec && isLateSlot && !isSelected && styles.slotPillLateBorder,
                     ]}
                     onPress={() => setSelectedSlotIndex(idx)}>
                     <View style={styles.slotPillTopRow}>
                       <Text style={[styles.slotPillTitle, isSelected && styles.slotPillTitleActive]}>
                         {slotLabel}
                       </Text>
-                      {isCompleted ? (
-                        <View style={styles.pillDoneBadge}>
-                          <MaterialIcons name="check" size={11} color={colors.white} />
+                      {isExec && !isPartial ? (
+                        <View style={isLateSlot ? styles.pillLateBadge : styles.pillDoneBadge}>
+                          <MaterialIcons name={isLateSlot ? 'alarm' : 'check'} size={11} color={colors.white} />
                         </View>
-                      ) : isPartial ? (
-                        <View style={styles.pillPartialBadge}>
-                          <MaterialIcons name="warning" size={11} color={colors.white} />
+                      ) : isExec && isPartial ? (
+                        <View style={isLateSlot ? styles.pillLateBadge : styles.pillPartialBadge}>
+                          <MaterialIcons name={isLateSlot ? 'alarm' : 'warning'} size={11} color={colors.white} />
+                        </View>
+                      ) : isLateSlot ? (
+                        <View style={styles.pillLateBadge}>
+                          <MaterialIcons name="alarm" size={11} color={colors.white} />
                         </View>
                       ) : null}
                     </View>
                     <Text style={[styles.slotPillSub, isSelected && styles.slotPillSubActive]}>
-                      {isCompleted ? 'Done ✓' : isPartial ? 'Partial ⚠️' : timeRule}
+                      {statusBadgeText}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -577,7 +815,7 @@ export const JanitorChecklistScreen = () => {
           )}
 
           {/* Time Warning if Late */}
-          {slotTiming.isLate && (
+          {slotTiming.isLate && !isSlotExecuted && (
             <View style={styles.lateWarningBox}>
               <MaterialIcons name="warning" size={18} color="#DC2626" />
               <Text style={styles.lateWarningText}>
@@ -592,21 +830,51 @@ export const JanitorChecklistScreen = () => {
 
         {/* Executed Slot Status Banner */}
         {isSlotExecuted && (
-          <View style={[styles.slotBannerBox, isActiveSlotAllDone ? styles.slotBannerBoxDone : styles.slotBannerBoxPartial]}>
+          <View
+            style={[
+              styles.slotBannerBox,
+              isEffectivelyLate
+                ? styles.slotBannerBoxLate
+                : isExecutionPartial
+                ? styles.slotBannerBoxPartial
+                : styles.slotBannerBoxDone,
+            ]}>
             <MaterialIcons
-              name={isActiveSlotAllDone ? 'verified' : 'report-problem'}
+              name={isEffectivelyLate ? 'alarm-on' : isExecutionPartial ? 'report-problem' : 'verified'}
               size={24}
-              color={isActiveSlotAllDone ? '#059669' : '#D97706'}
+              color={isEffectivelyLate ? '#DC2626' : isExecutionPartial ? '#D97706' : '#059669'}
             />
             <View style={styles.slotBannerTextWrap}>
-              <Text style={[styles.slotBannerTitle, {color: isActiveSlotAllDone ? '#065F46' : '#92400E'}]}>
-                {activeSlotKey} • {activeSlotExecution.status}
+              <Text
+                style={[
+                  styles.slotBannerTitle,
+                  {
+                    color: isEffectivelyLate
+                      ? '#991B1B'
+                      : isExecutionPartial
+                      ? '#92400E'
+                      : '#065F46',
+                  },
+                ]}>
+                {activeSlotKey} • {
+                  isExecutionPartial
+                    ? isEffectivelyLate
+                      ? `Partially Completed (Late by ${lateDelayFormatted})`
+                      : 'Partially Completed (On Time)'
+                    : isEffectivelyLate
+                    ? `Completed (Late by ${lateDelayFormatted})`
+                    : 'Completed (On Time)'
+                }
               </Text>
               <Text style={styles.slotBannerSubtitle}>
-                {activeSlotExecution.executed_at ? `Submitted at ${activeSlotExecution.executed_at}. ` : ''}
-                {isActiveSlotAllDone
-                  ? 'All tasks in this slot were completed.'
-                  : 'Certain tasks were flagged with issues or not completed.'}
+                {activeSlotExecution?.executed_at ? `Submitted at ${activeSlotExecution.executed_at}. ` : ''}
+                {isExecutionPartial && isEffectivelyLate
+                  ? `Incomplete tasks were logged, and submission was delayed past scheduled slot end (${activeSlot.end_time}).`
+                  : isExecutionPartial
+                  ? 'Certain tasks were flagged with issues or not completed.'
+                  : isEffectivelyLate
+                  ? `All tasks completed, but submitted after scheduled slot time (${activeSlot.end_time}).`
+                  : 'All tasks in this slot were completed on time.'}
               </Text>
             </View>
           </View>
@@ -952,6 +1220,17 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     marginLeft: 6,
   },
+  pillLateBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  slotPillLateBorder: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
   slotBannerBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -967,6 +1246,10 @@ const styles = StyleSheet.create({
   slotBannerBoxPartial: {
     backgroundColor: '#FFFBEB',
     borderColor: '#FDE68A',
+  },
+  slotBannerBoxLate: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
   },
   slotBannerTextWrap: {
     marginLeft: 10,
