@@ -61,6 +61,7 @@ export const getScheduleSlots = createAsyncThunk(
       const targetDate = params?.visit_date || params?.date || '';
 
       const queryParams: any = {
+        ...params,
         action: targetAction,
         APIKEY: effectiveApiKey,
         emp_code: empCode,
@@ -69,7 +70,6 @@ export const getScheduleSlots = createAsyncThunk(
         employee_id: empId,
         date: targetDate,
         visit_date: targetDate,
-        ...params,
       };
 
       console.log('[getScheduleSlots] Request params:', queryParams, 'Target:', targetUrl);

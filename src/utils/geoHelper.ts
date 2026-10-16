@@ -241,13 +241,24 @@ export const evaluateSlotTiming = (
   _targetDate?: string,
   lateThresholdMinutes: number = 0,
 ): SlotTimingStatus => {
-  const hasRule =
+  let hasRule =
     slot.has_rule === 1 ||
     slot.has_rule === true ||
     slot.has_time_rule === true;
 
-  const startTimeStr = slot.start_time;
-  const endTimeStr = slot.end_time;
+  let startTimeStr = slot.start_time;
+  let endTimeStr = slot.end_time;
+
+  // Fallback: If no explicit start/end time, extract time range from text (e.g. "Slot 1 (08:00 - 11:55)")
+  if (!endTimeStr || endTimeStr === '0' || endTimeStr.trim() === '') {
+    const textToSearch = `${slot.slot_time || ''} ${slot.time_rule || ''} ${slot.name || ''}`;
+    const rangeMatch = textToSearch.match(/(\d{1,2}:\d{2})\s*[-–to]+\s*(\d{1,2}:\d{2})/i);
+    if (rangeMatch) {
+      startTimeStr = rangeMatch[1].trim();
+      endTimeStr = rangeMatch[2].trim();
+      hasRule = true;
+    }
+  }
 
   // If no rule or missing valid end time, it's considered on time
   if (
@@ -280,14 +291,41 @@ export const evaluateSlotTiming = (
     };
   }
 
+  // Determine the base day (respecting the selected slot date)
+  let baseDate = now.clone();
+  if (_targetDate && typeof _targetDate === 'string' && _targetDate.trim() !== '') {
+    const parsedTarget = moment(_targetDate, [
+      'YYYY-MM-DD',
+      'YYYY/MM/DD',
+      'MMMM DD, YYYY',
+      'MMMM D, YYYY',
+      'YYYY-MM-DD HH:mm:ss',
+      moment.ISO_8601,
+    ]);
+    if (parsedTarget.isValid()) {
+      baseDate = parsedTarget;
+    }
+  }
+
+  // If viewing a future date, slots cannot be late yet
+  if (baseDate.isAfter(now, 'day')) {
+    return {
+      isLate: false,
+      delayMinutes: 0,
+      statusLabel: 'Upcoming Window',
+      badgeColor: '#3B82F6',
+      isWithinWindow: false,
+    };
+  }
+
   // Construct start and end moments for the active shift day
-  const endMoment = now.clone().hour(parsedEnd.hour()).minute(parsedEnd.minute()).second(0).millisecond(0);
+  const endMoment = baseDate.clone().hour(parsedEnd.hour()).minute(parsedEnd.minute()).second(0).millisecond(0);
 
   let startMoment = endMoment.clone().subtract(1, 'hour');
   if (startTimeStr && startTimeStr !== '0' && startTimeStr.trim() !== '') {
     const parsedStart = moment(startTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'H:m']);
     if (parsedStart.isValid()) {
-      startMoment = now.clone().hour(parsedStart.hour()).minute(parsedStart.minute()).second(0).millisecond(0);
+      startMoment = baseDate.clone().hour(parsedStart.hour()).minute(parsedStart.minute()).second(0).millisecond(0);
     }
   }
 

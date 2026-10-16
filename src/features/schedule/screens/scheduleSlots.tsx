@@ -166,7 +166,8 @@ export const ScheduleSlots = ({route}: any) => {
                       <View style={styles.slotsPillsRow}>
                         {slotsList.map((s: any, sIdx: number) => {
                           const isDone = s.is_completed === 'Yes' || s.execution_status === 'Completed';
-                          const timing = evaluateSlotTiming(s, data?.date || currentDate);
+                          const lateThreshold = Number(data?.settings?.late_time_minutes) >= 0 ? Number(data.settings.late_time_minutes) : 15;
+                          const timing = evaluateSlotTiming(s, data?.date || currentDate, lateThreshold);
                           const slotLabel = s.slot_name || s.name || s.slot_time || `Slot ${sIdx + 1}`;
                           const timeRuleText = s.start_time && s.end_time && s.end_time !== '0'
                             ? `${s.start_time} - ${s.end_time}`
