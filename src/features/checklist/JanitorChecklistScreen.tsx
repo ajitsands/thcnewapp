@@ -23,7 +23,13 @@ import {
   resetSubmitState,
 } from '../../store/reducers/janitorExecutionReducer';
 import {getScheduleSlots} from '../../store/reducers/getSlots';
-import {evaluateSlotTiming, formatLateDuration, SlotRuleInfo} from '../../utils/geoHelper';
+import {
+  evaluateSlotTiming,
+  formatLateDuration,
+  SlotRuleInfo,
+  getCurrentLocation,
+  calculateDistanceMeters,
+} from '../../utils/geoHelper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {useToast} from 'react-native-toast-notifications';
 import {launchCamera} from 'react-native-image-picker';
@@ -50,6 +56,10 @@ export const JanitorChecklistScreen = () => {
     slotsDetail,
     selectedDate,
     verifiedDistance,
+    scanLat,
+    scanLng,
+    assetLat,
+    assetLng,
   } = route.params || {};
 
   const {checklistLoading, checklistData, submitLoading, submitSuccess, submitError} =
@@ -253,15 +263,46 @@ export const JanitorChecklistScreen = () => {
         {
           text: 'Submit Now',
           style: 'default',
-          onPress: () => {
+          onPress: async () => {
+            let submitScanLat = scanLat;
+            let submitScanLng = scanLng;
+            let submitAssetLat = assetLat || assignment?.latitude || assignment?.building_latitude;
+            let submitAssetLng = assetLng || assignment?.longitude || assignment?.building_longitude;
+            let submitDistance = verifiedDistance;
+
+            if (!submitScanLat || !submitScanLng) {
+              try {
+                const pos = await getCurrentLocation();
+                submitScanLat = pos.latitude;
+                submitScanLng = pos.longitude;
+                if (!submitDistance && submitAssetLat && submitAssetLng) {
+                  submitDistance = calculateDistanceMeters(
+                    submitScanLat,
+                    submitScanLng,
+                    Number(submitAssetLat),
+                    Number(submitAssetLng),
+                  );
+                }
+              } catch (e) {
+                // If device location fails, fallback to asset target location
+                submitScanLat = submitAssetLat;
+                submitScanLng = submitAssetLng;
+              }
+            }
+
             dispatch(
               submitChecklistExecution({
-                assignment_id: assignmentId || assignment?.assignment_id,
+                assignment_id: assignmentId || assignment?.assignment_id || assignment?.id,
                 slot: activeSlotName,
                 date: selectedDate || moment().format('YYYY-MM-DD'),
                 status: executionStatus,
                 remarks: finalRemarks,
                 points,
+                scan_lat: submitScanLat,
+                scan_lng: submitScanLng,
+                asset_lat: submitAssetLat,
+                asset_lng: submitAssetLng,
+                distance_meters: submitDistance,
               }),
             );
           },
@@ -289,7 +330,8 @@ export const JanitorChecklistScreen = () => {
             </Text>
             <Text style={styles.verifiedSubDetail}>
               {assignment?.building_name} • {assignment?.asset_description || 'Washroom'}
-              {verifiedDistance !== undefined ? ` • Precision: ${verifiedDistance}m` : ''}
+              {scanLat ? ` • GPS: ${Number(scanLat).toFixed(4)}, ${Number(scanLng).toFixed(4)}` : ''}
+              {verifiedDistance !== undefined ? ` • Distance: ${Number(verifiedDistance).toFixed(1)}m` : ''}
             </Text>
           </View>
         </View>

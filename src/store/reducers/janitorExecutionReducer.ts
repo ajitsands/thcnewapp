@@ -69,12 +69,24 @@ export const verifyAssetAndLocation = createAsyncThunk(
       formData.append('asset_code', String(params?.asset_code || ''));
       formData.append('latitude', String(params?.latitude || ''));
       formData.append('longitude', String(params?.longitude || ''));
+      if (params?.assignment_id) {
+        formData.append('assignment_id', String(params.assignment_id));
+      }
+      if (params?.asset_latitude !== undefined && params?.asset_latitude !== null) {
+        formData.append('asset_latitude', String(params.asset_latitude));
+      }
+      if (params?.asset_longitude !== undefined && params?.asset_longitude !== null) {
+        formData.append('asset_longitude', String(params.asset_longitude));
+      }
       formData.append('allowed_radius_meters', String(params?.allowed_radius_meters || 10));
 
       console.log('[verifyAssetAndLocation] Sending verification:', {
         asset_code: params?.asset_code,
         lat: params?.latitude,
         lng: params?.longitude,
+        asset_lat: params?.asset_latitude,
+        asset_lng: params?.asset_longitude,
+        assignment_id: params?.assignment_id,
       });
 
       const response = await postRequest(ApiUrl.janitorURL, formData);
@@ -183,6 +195,11 @@ export const submitChecklistExecution = createAsyncThunk(
       date?: string;
       status?: string;
       remarks?: string;
+      scan_lat?: number | string;
+      scan_lng?: number | string;
+      asset_lat?: number | string;
+      asset_lng?: number | string;
+      distance_meters?: number | string;
       points: Array<{
         checklist_item_id: number | string;
         is_completed: 'Yes' | 'No';
@@ -216,6 +233,21 @@ export const submitChecklistExecution = createAsyncThunk(
       if (params.remarks) {
         formData.append('remarks', params.remarks);
       }
+      if (params.scan_lat !== undefined && params.scan_lat !== null) {
+        formData.append('scan_lat', String(params.scan_lat));
+      }
+      if (params.scan_lng !== undefined && params.scan_lng !== null) {
+        formData.append('scan_lng', String(params.scan_lng));
+      }
+      if (params.asset_lat !== undefined && params.asset_lat !== null) {
+        formData.append('asset_lat', String(params.asset_lat));
+      }
+      if (params.asset_lng !== undefined && params.asset_lng !== null) {
+        formData.append('asset_lng', String(params.asset_lng));
+      }
+      if (params.distance_meters !== undefined && params.distance_meters !== null) {
+        formData.append('distance_meters', String(params.distance_meters));
+      }
       formData.append('points', JSON.stringify(params.points));
 
       console.log('[submitChecklistExecution] Submitting execution:', {
@@ -223,6 +255,11 @@ export const submitChecklistExecution = createAsyncThunk(
         slot: params.slot,
         status: params.status,
         pointsCount: params.points.length,
+        scan_lat: params.scan_lat,
+        scan_lng: params.scan_lng,
+        asset_lat: params.asset_lat,
+        asset_lng: params.asset_lng,
+        dist: params.distance_meters,
       });
 
       const response = await postRequest(ApiUrl.janitorURL, formData);

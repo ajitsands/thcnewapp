@@ -46,6 +46,8 @@ export const JanitorQRScannerScreen = () => {
 
   // Scan & Location state
   const [lastScannedCode, setLastScannedCode] = useState('');
+  const [lastDeviceLat, setLastDeviceLat] = useState<number | null>(null);
+  const [lastDeviceLng, setLastDeviceLng] = useState<number | null>(null);
   const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
   const [isLocationMismatch, setIsLocationMismatch] = useState(false);
   const [isGpsError, setIsGpsError] = useState(false);
@@ -68,120 +70,157 @@ export const JanitorQRScannerScreen = () => {
     setHasScanned(true);
     Vibration.vibrate(100);
 
-    // ==========================================
-    // STEP 1: ASSET CODE VALIDATION
-    // ==========================================
     const cleanScanned = scannedValue.trim();
     const cleanExpected = (expectedAssetCode || '').trim();
     setLastScannedCode(cleanScanned);
 
-    if (cleanScanned !== cleanExpected) {
+    // ==========================================
+    // STEP 1: RETRIEVE DEVICE GPS LOCATION FIRST
+    // ==========================================
+    setIsVerifying(true);
+    setVerificationStatusText('Retrieving accurate device GPS location...');
+
+    let currentLat = 0;
+    let currentLng = 0;
+    let distance = 0;
+
+    try {
+      const position = await getCurrentLocation();
+      currentLat = position.latitude;
+      currentLng = position.longitude;
+
+      setLastDeviceLat(currentLat);
+      setLastDeviceLng(currentLng);
+
+      distance = calculateDistanceMeters(
+        currentLat,
+        currentLng,
+        Number(targetLat) || currentLat,
+        Number(targetLng) || currentLng,
+      );
+      setCalculatedDistance(distance);
+    } catch (gpsError: any) {
+      console.warn('[JanitorQRScanner] GPS retrieval error:', gpsError);
+    }
+
+    console.log('[JanitorQRScanner] Pushing Scan Location to Server:', {
+      cleanScanned,
+      cleanExpected,
+      currentLat,
+      currentLng,
+      targetLat,
+      targetLng,
+      distanceMeters: distance,
+      assignmentId: assignmentId || assignment?.assignment_id,
+    });
+
+    // ==========================================
+    // STEP 2: ASSET CODE CHECK & SERVER PUSH
+    // ==========================================
+    // If scanned code doesn't match expected asset code, push scan to server & notify user
+    if (cleanExpected && cleanScanned !== cleanExpected) {
+      if (currentLat && currentLng) {
+        setVerificationStatusText('Logging mismatched scan to server...');
+        try {
+          await dispatch(
+            verifyAssetAndLocation({
+              asset_code: cleanScanned,
+              latitude: currentLat,
+              longitude: currentLng,
+              asset_latitude: targetLat,
+              asset_longitude: targetLng,
+              assignment_id: assignmentId || assignment?.assignment_id,
+            }),
+          );
+        } catch (e) {
+          // ignore error since code is mismatched anyway
+        }
+      }
+      setIsVerifying(false);
       setIsLocationMismatch(false);
       setIsGpsError(false);
       setErrorTitle('Asset Code Mismatch');
       setErrorMessage(
-        `Scanned QR: "${cleanScanned}"\n\nExpected Asset Code: "${cleanExpected}"\n\nPlease scan the physical QR sticker attached to this specific asset.`,
+        `Scanned QR: "${cleanScanned}"\n\nExpected Asset Code: "${cleanExpected}"\n\nPlease scan the physical QR sticker attached to this specific asset.\n\n(Your scan attempt and location have been logged on the server.)`,
+      );
+      setErrorModalVisible(true);
+      return;
+    }
+
+    // If GPS could not be obtained
+    if (!currentLat || !currentLng) {
+      setIsVerifying(false);
+      setIsLocationMismatch(false);
+      setIsGpsError(true);
+      setErrorTitle('GPS Location Error');
+      setErrorMessage(
+        `Could not retrieve accurate GPS location.\n\nPlease check phone Location settings or tap "TEST MODE: PROCEED ANYWAY" below to test the checklist.`,
       );
       setErrorModalVisible(true);
       return;
     }
 
     // ==========================================
-    // STEP 2: GPS GEOLOCATION VALIDATION (<= 10 METERS)
+    // STEP 3: PUSH SCAN LOCATION & VERIFY WITH SERVER
     // ==========================================
-    setIsVerifying(true);
-    setVerificationStatusText('Verifying device GPS location...');
+    setVerificationStatusText('Logging scan location & verifying with portal...');
 
-    try {
-      const position = await getCurrentLocation();
-      const currentLat = position.latitude;
-      const currentLng = position.longitude;
+    const verifyRes: any = await dispatch(
+      verifyAssetAndLocation({
+        asset_code: cleanScanned,
+        latitude: currentLat,
+        longitude: currentLng,
+        asset_latitude: targetLat,
+        asset_longitude: targetLng,
+        assignment_id: assignmentId || assignment?.assignment_id,
+      }),
+    );
 
-      setVerificationStatusText('Calculating distance to asset...');
+    setIsVerifying(false);
 
-      const distance = calculateDistanceMeters(
-        currentLat,
-        currentLng,
-        Number(targetLat) || currentLat,
-        Number(targetLng) || currentLng,
-      );
-
-      setCalculatedDistance(distance);
-
-      console.log('[JanitorQRScanner] GPS Check:', {
-        currentLat,
-        currentLng,
-        targetLat,
-        targetLng,
-        distanceMeters: distance,
-        allowedLimit: MAX_ALLOWED_DISTANCE_METERS,
-      });
-
-      if (distance > MAX_ALLOWED_DISTANCE_METERS) {
-        setIsVerifying(false);
-        setIsLocationMismatch(true);
-        setIsGpsError(false);
-        setErrorTitle('Location Mismatch');
-        setErrorMessage(
-          `Current device location is ${formatDistance(
-            distance,
-          )} away from this asset (${assignment?.building_name || 'Assigned Building'}).\n\nStandard rule: Must be within 10 meters.\n\nTesting Mode: Tap "TEST MODE: PROCEED ANYWAY" below to bypass location check and test the checklist.`,
-        );
-        setErrorModalVisible(true);
-        return;
-      }
-
-      // ==========================================
-      // STEP 3: BACKEND VERIFICATION & ATTENDANCE
-      // ==========================================
-      setVerificationStatusText('Recording attendance & unlocking tasks...');
-
-      const verifyRes: any = await dispatch(
-        verifyAssetAndLocation({
-          asset_code: cleanScanned,
-          latitude: currentLat,
-          longitude: currentLng,
-          allowed_radius_meters: MAX_ALLOWED_DISTANCE_METERS,
-        }),
-      );
-
-      setIsVerifying(false);
-
-      if (verifyRes?.error) {
-        setIsLocationMismatch(false);
-        setIsGpsError(false);
-        setErrorTitle('Server Verification Failed');
-        setErrorMessage(
-          verifyRes?.payload ||
+    if (verifyRes?.error) {
+      const errorText =
+        typeof verifyRes?.payload === 'string'
+          ? verifyRes.payload
+          : verifyRes?.payload?.api_message ||
             verifyRes?.error?.message ||
-            'Failed to verify attendance with portal.',
-        );
-        setErrorModalVisible(true);
-        return;
-      }
+            'Failed to verify attendance with portal.';
 
-      // ==========================================
-      // STEP 4: SUCCESS -> NAVIGATE TO CHECKLIST
-      // ==========================================
-      navigation.replace('JanitorChecklist', {
-        assignment,
-        checklistId: checklistId || assignment?.checklist_id,
-        assignmentId: assignmentId || assignment?.assignment_id,
-        slotsDetail,
-        selectedDate,
-        verifiedDistance: distance,
-        verifiedAt: new Date().toISOString(),
-      });
-    } catch (gpsError: any) {
-      setIsVerifying(false);
-      setIsLocationMismatch(false);
-      setIsGpsError(true);
-      setErrorTitle('GPS Location Error');
+      const isMismatch =
+        errorText.toUpperCase().includes('LOCATION MISMATCH') ||
+        errorText.includes('Mismatch') ||
+        distance > 200;
+
+      setIsLocationMismatch(isMismatch);
+      setIsGpsError(false);
+      setErrorTitle(isMismatch ? 'Location Mismatch' : 'Server Verification Failed');
       setErrorMessage(
-        `${gpsError?.message || 'Could not retrieve accurate GPS location.'}\n\nPlease check phone Location settings or tap "TEST MODE: PROCEED ANYWAY" below to test the checklist.`,
+        isMismatch
+          ? `Your scanned location is ${formatDistance(
+              distance,
+            )} away from this asset (${assignment?.building_name || 'Assigned Building'}).\n\nYour scan location has been pushed and logged on the server as Location Mismatch.\n\nTap "TEST MODE: PROCEED ANYWAY" below to test the checklist.`
+          : errorText,
       );
       setErrorModalVisible(true);
+      return;
     }
+
+    // ==========================================
+    // STEP 4: SUCCESS -> NAVIGATE TO CHECKLIST
+    // ==========================================
+    navigation.replace('JanitorChecklist', {
+      assignment,
+      checklistId: checklistId || assignment?.checklist_id,
+      assignmentId: assignmentId || assignment?.assignment_id,
+      slotsDetail,
+      selectedDate,
+      verifiedDistance: distance,
+      verifiedAt: new Date().toISOString(),
+      scanLat: currentLat,
+      scanLng: currentLng,
+      assetLat: targetLat,
+      assetLng: targetLng,
+    });
   };
 
   const handleRetryScan = () => {
@@ -198,16 +237,30 @@ export const JanitorQRScannerScreen = () => {
     setVerificationStatusText('Recording attendance in Test Mode...');
 
     const codeToVerify = lastScannedCode || expectedAssetCode || '';
-    const testLat = Number(targetLat) || 26.1869544;
-    const testLng = Number(targetLng) || 50.5222792;
+    let actualLat = lastDeviceLat;
+    let actualLng = lastDeviceLng;
+
+    if (!actualLat || !actualLng) {
+      try {
+        const pos = await getCurrentLocation();
+        actualLat = pos.latitude;
+        actualLng = pos.longitude;
+      } catch (e) {
+        actualLat = Number(targetLat) || 26.1869544;
+        actualLng = Number(targetLng) || 50.5222792;
+      }
+    }
 
     try {
       await dispatch(
         verifyAssetAndLocation({
           asset_code: codeToVerify,
-          latitude: testLat,
-          longitude: testLng,
+          latitude: actualLat,
+          longitude: actualLng,
+          asset_latitude: targetLat,
+          asset_longitude: targetLng,
           allowed_radius_meters: 5000000,
+          assignment_id: assignmentId || assignment?.assignment_id,
         }),
       );
     } catch (err: any) {
@@ -225,6 +278,10 @@ export const JanitorQRScannerScreen = () => {
         verifiedDistance: calculatedDistance || 0,
         verifiedAt: new Date().toISOString(),
         isTestBypass: true,
+        scanLat: actualLat,
+        scanLng: actualLng,
+        assetLat: targetLat,
+        assetLng: targetLng,
       });
     }
   };
