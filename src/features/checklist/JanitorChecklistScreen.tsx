@@ -76,6 +76,18 @@ export const JanitorChecklistScreen = () => {
       ? Number(activeSettings.late_time_minutes)
       : 15;
 
+  // Date restriction evaluation: Only current date tasks can be executed / submitted
+  const todayDate = moment().format('YYYY-MM-DD');
+  const taskDate = selectedDate
+    ? (moment(selectedDate, ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601], true).isValid()
+        ? moment(selectedDate, ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601], true).format('YYYY-MM-DD')
+        : moment(selectedDate).format('YYYY-MM-DD'))
+    : todayDate;
+
+  const isToday = taskDate === todayDate;
+  const isPast = taskDate < todayDate;
+  const isFuture = taskDate > todayDate;
+
   // Parse Slots
   let parsedSlots: any[] = [];
   try {
@@ -403,6 +415,13 @@ export const JanitorChecklistScreen = () => {
   ]);
 
   const toggleItemStatus = (itemId: string, status: 'Yes' | 'No') => {
+    if (!isToday) {
+      toast.show(
+        `Checklist is view-only for ${isPast ? 'past' : 'upcoming'} dates. Submissions are only permitted for today's tasks.`,
+        {type: 'warning'},
+      );
+      return;
+    }
     setSlotStates(prev => {
       const currentSlotMap = prev[activeSlotKey] || {};
       const existing = currentSlotMap[itemId] || {
@@ -460,6 +479,10 @@ export const JanitorChecklistScreen = () => {
   };
 
   const handleTakePhoto = async (itemId: string) => {
+    if (!isToday) {
+      toast.show('Photo capture is disabled in view-only mode for past or upcoming dates.', {type: 'warning'});
+      return;
+    }
     try {
       const result = await launchCamera({
         mediaType: 'photo',
@@ -519,6 +542,14 @@ export const JanitorChecklistScreen = () => {
   };
 
   const handleSubmit = () => {
+    if (!isToday) {
+      Alert.alert(
+        'Submission Disabled',
+        `This task was scheduled for ${taskDate}.\n\nJanitors are only permitted to execute and submit checklists for today's current date (${todayDate}).`,
+        [{text: 'Understood', style: 'default'}],
+      );
+      return;
+    }
     const currentSlotMap = slotStates[activeSlotKey] || {};
     const categoriesList = checklistData?.data || [];
     const pointsMap: Record<string, any> = {};
@@ -676,6 +707,22 @@ export const JanitorChecklistScreen = () => {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         nestedScrollEnabled={true}>
+        {/* Date Restriction Notice Banner if not today */}
+        {!isToday && (
+          <View style={[styles.viewOnlyDateBanner, isPast ? styles.viewOnlyBannerPast : styles.viewOnlyBannerFuture]}>
+            <MaterialIcons
+              name={isPast ? 'lock-clock' : 'schedule'}
+              size={20}
+              color={isPast ? '#DC2626' : '#2563EB'}
+            />
+            <Text style={[styles.viewOnlyDateBannerText, isPast ? styles.viewOnlyTextPast : styles.viewOnlyTextFuture]}>
+              {isPast
+                ? `VIEW ONLY: This task was scheduled for a past date (${moment(taskDate).format('DD MMM YYYY')}). Editing and submissions are disabled. Only today's tasks can be executed.`
+                : `VIEW ONLY: This task is scheduled for an upcoming date (${moment(taskDate).format('DD MMM YYYY')}). Editing and submissions will unlock on the scheduled day.`}
+            </Text>
+          </View>
+        )}
+
         {/* Verification Summary Card */}
         <View style={styles.verifiedHeaderCard}>
           <View style={styles.verifiedIconWrap}>
@@ -1054,27 +1101,36 @@ export const JanitorChecklistScreen = () => {
         </View>
 
         {/* Submit Execution Button */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.submitButton,
-            !isActiveSlotAllDone && styles.submitButtonPartial,
-            submitLoading && styles.submitButtonDisabled,
-          ]}
-          onPress={handleSubmit}
-          disabled={submitLoading || checklistLoading}>
-          {submitLoading ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <>
-              <MaterialIcons name={isSlotExecuted ? 'edit' : 'send'} size={20} color={colors.white} />
-              <Text style={styles.submitButtonText}>
-                {isSlotExecuted ? 'UPDATE CHECKLIST' : 'SUBMIT CHECKLIST'}{' '}
-                ({isActiveSlotAllDone ? 'COMPLETED' : 'PARTIALLY COMPLETED'}{slotTiming.isLate ? ' - LATE' : ''})
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {isToday ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[
+              styles.submitButton,
+              !isActiveSlotAllDone && styles.submitButtonPartial,
+              submitLoading && styles.submitButtonDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={submitLoading || checklistLoading}>
+            {submitLoading ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <>
+                <MaterialIcons name={isSlotExecuted ? 'edit' : 'send'} size={20} color={colors.white} />
+                <Text style={styles.submitButtonText}>
+                  {isSlotExecuted ? 'UPDATE CHECKLIST' : 'SUBMIT CHECKLIST'}{' '}
+                  ({isActiveSlotAllDone ? 'COMPLETED' : 'PARTIALLY COMPLETED'}{slotTiming.isLate ? ' - LATE' : ''})
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.submitButton, styles.submitButtonViewOnly]}>
+            <MaterialIcons name="lock" size={20} color={colors.white} />
+            <Text style={styles.submitButtonText}>
+              SUBMISSION DISABLED ({isPast ? 'PAST DATE' : 'UPCOMING DATE'})
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -1502,6 +1558,41 @@ const styles = StyleSheet.create({
     color: colors.grey,
     marginTop: 10,
     textAlign: 'center',
+  },
+  viewOnlyDateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginBottom: 14,
+    borderWidth: 1.5,
+  },
+  viewOnlyBannerPast: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  viewOnlyBannerFuture: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  viewOnlyDateBannerText: {
+    fontSize: scaleFont(12),
+    fontFamily: FontFamily.medium,
+    marginLeft: 10,
+    flex: 1,
+    lineHeight: 18,
+  },
+  viewOnlyTextPast: {
+    color: '#991B1B',
+  },
+  viewOnlyTextFuture: {
+    color: '#1E40AF',
+  },
+  submitButtonViewOnly: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });
 

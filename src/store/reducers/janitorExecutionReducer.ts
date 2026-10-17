@@ -85,6 +85,9 @@ export const verifyAssetAndLocation = createAsyncThunk(
       formData.append('asset_code', String(params?.asset_code || ''));
       formData.append('latitude', String(params?.latitude || ''));
       formData.append('longitude', String(params?.longitude || ''));
+      if (params?.date) {
+        formData.append('date', String(params.date));
+      }
       if (params?.assignment_id) {
         formData.append('assignment_id', String(params.assignment_id));
       }

@@ -18,6 +18,7 @@ import MaterialIcons from '@react-native-vector-icons/material-icons';
 import {useAppDispatch, useAppSelector} from '../../../store';
 import {verifyAssetAndLocation, getJanitorSettings} from '../../../store/reducers/janitorExecutionReducer';
 import {calculateDistanceMeters, getCurrentLocation, formatDistance} from '../../../utils/geoHelper';
+import moment from 'moment';
 
 const frameSize = 260;
 
@@ -54,6 +55,19 @@ export const JanitorQRScannerScreen = () => {
     selectedDate,
   } = route.params || {};
 
+  // Date restriction evaluation: Only current date tasks can be scanned
+  const todayDate = moment().format('YYYY-MM-DD');
+  const taskDate = selectedDate
+    ? (moment(selectedDate, ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601], true).isValid()
+        ? moment(selectedDate, ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601], true).format('YYYY-MM-DD')
+        : moment(selectedDate).format('YYYY-MM-DD'))
+    : todayDate;
+
+  const isToday = taskDate === todayDate;
+  const isPast = taskDate < todayDate;
+  const isFuture = taskDate > todayDate;
+
+  const [isDateRestricted, setIsDateRestricted] = useState(!isToday);
   const [flashOn, setFlashOn] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationStatusText, setVerificationStatusText] = useState('');
@@ -68,9 +82,29 @@ export const JanitorQRScannerScreen = () => {
   const [isGpsError, setIsGpsError] = useState(false);
 
   // Error dialog state
-  const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [errorTitle, setErrorTitle] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorModalVisible, setErrorModalVisible] = useState(!isToday);
+  const [errorTitle, setErrorTitle] = useState(!isToday ? 'Date Restriction' : '');
+  const [errorMessage, setErrorMessage] = useState(
+    !isToday
+      ? isPast
+        ? `This cleaning task was scheduled for a past date (${moment(taskDate).format('DD MMMM YYYY')}).\n\nJanitors are only permitted to scan and execute tasks for the current date (${moment(todayDate).format('DD MMMM YYYY')}).\n\nPlease go back and select today's schedule.`
+        : `This cleaning task is scheduled for an upcoming date (${moment(taskDate).format('DD MMMM YYYY')}).\n\nYou cannot scan upcoming tasks in advance. Please scan on the scheduled day (${moment(taskDate).format('DD MMMM YYYY')}).\n\nPlease go back and select today's schedule.`
+      : '',
+  );
+
+  // Check date restriction immediately on mount
+  React.useEffect(() => {
+    if (!isToday) {
+      setIsDateRestricted(true);
+      setErrorTitle('Date Restriction');
+      setErrorMessage(
+        isPast
+          ? `This cleaning task was scheduled for a past date (${moment(taskDate).format('DD MMMM YYYY')}).\n\nJanitors are only permitted to scan and execute tasks for the current date (${moment(todayDate).format('DD MMMM YYYY')}).\n\nPlease go back and select today's schedule.`
+          : `This cleaning task is scheduled for an upcoming date (${moment(taskDate).format('DD MMMM YYYY')}).\n\nYou cannot scan upcoming tasks in advance. Please scan on the scheduled day (${moment(taskDate).format('DD MMMM YYYY')}).\n\nPlease go back and select today's schedule.`
+      );
+      setErrorModalVisible(true);
+    }
+  }, [isToday, isPast, isFuture, taskDate, todayDate]);
 
   // Fetch settings from server on mount if not provided in params
   React.useEffect(() => {
@@ -80,6 +114,18 @@ export const JanitorQRScannerScreen = () => {
   }, [route.params?.settings, dispatch]);
 
   const onReadCode = async (event: any) => {
+    if (!isToday) {
+      setIsDateRestricted(true);
+      setErrorTitle('Date Restriction');
+      setErrorMessage(
+        isPast
+          ? `Scanning is disabled for past dates (${moment(taskDate).format('DD MMMM YYYY')}). Janitors can only scan today's tasks.`
+          : `Scanning is disabled for upcoming dates (${moment(taskDate).format('DD MMMM YYYY')}). You can only scan on the scheduled day.`,
+      );
+      setErrorModalVisible(true);
+      return;
+    }
+
     if (hasScanned || isVerifying) {
       return;
     }
@@ -196,6 +242,7 @@ export const JanitorQRScannerScreen = () => {
         asset_longitude: targetLng,
         allowed_radius_meters: minRadiusMeters,
         assignment_id: assignmentId || assignment?.assignment_id,
+        date: taskDate,
       }),
     );
 
@@ -289,6 +336,7 @@ export const JanitorQRScannerScreen = () => {
           asset_longitude: targetLng,
           allowed_radius_meters: 5000000,
           assignment_id: assignmentId || assignment?.assignment_id,
+          date: taskDate,
         }),
       );
     } catch (err: any) {
@@ -387,8 +435,8 @@ export const JanitorQRScannerScreen = () => {
             📍 High-precision GPS verification required (within {minRadiusMeters}m)
           </Text>
 
-          {/* Test Shortcut - Only shown if GPS Test Bypass is enabled in Admin Settings */}
-          {allowGpsBypass && (
+          {/* Test Shortcut - Only shown if GPS Test Bypass is enabled in Admin Settings and it is today */}
+          {allowGpsBypass && !isDateRestricted && isToday && (
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.directTestShortcut}
@@ -417,29 +465,49 @@ export const JanitorQRScannerScreen = () => {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.errorIconCircle}>
-              <MaterialIcons name="error-outline" size={36} color="#EF4444" />
+              <MaterialIcons
+                name={isDateRestricted ? 'event-busy' : 'error-outline'}
+                size={36}
+                color={isDateRestricted ? '#DC2626' : '#EF4444'}
+              />
             </View>
             <Text style={styles.modalTitle}>{errorTitle}</Text>
             <Text style={styles.modalMessage}>{errorMessage}</Text>
 
-            {/* Primary Retry Button */}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.retryButton}
-              onPress={handleRetryScan}>
-              <MaterialIcons name="refresh" size={20} color={colors.white} />
-              <Text style={styles.retryButtonText}>TRY AGAIN</Text>
-            </TouchableOpacity>
-
-            {/* Test Mode Bypass Button - Only allowed if enabled by Admin */}
-            {(isLocationMismatch || isGpsError) && allowGpsBypass && (
+            {/* If Date Restricted, show only Go Back button */}
+            {isDateRestricted ? (
               <TouchableOpacity
                 activeOpacity={0.85}
-                style={styles.bypassButton}
-                onPress={handleBypassLocation}>
-                <MaterialIcons name="bolt" size={20} color={colors.white} />
-                <Text style={styles.bypassButtonText}>TEST MODE: PROCEED ANYWAY</Text>
+                style={[styles.retryButton, {backgroundColor: '#2563EB'}]}
+                onPress={() => {
+                  setErrorModalVisible(false);
+                  navigation.goBack();
+                }}>
+                <MaterialIcons name="arrow-back" size={20} color={colors.white} />
+                <Text style={styles.retryButtonText}>GO BACK TO SCHEDULE</Text>
               </TouchableOpacity>
+            ) : (
+              <>
+                {/* Primary Retry Button */}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.retryButton}
+                  onPress={handleRetryScan}>
+                  <MaterialIcons name="refresh" size={20} color={colors.white} />
+                  <Text style={styles.retryButtonText}>TRY AGAIN</Text>
+                </TouchableOpacity>
+
+                {/* Test Mode Bypass Button - Only allowed if enabled by Admin */}
+                {(isLocationMismatch || isGpsError) && allowGpsBypass && (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={styles.bypassButton}
+                    onPress={handleBypassLocation}>
+                    <MaterialIcons name="bolt" size={20} color={colors.white} />
+                    <Text style={styles.bypassButtonText}>TEST MODE: PROCEED ANYWAY</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         </View>

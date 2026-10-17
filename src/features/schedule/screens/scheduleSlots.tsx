@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import {Header} from '../../../core/components/header';
 import colors from '../../../themes/colors';
@@ -18,6 +19,7 @@ import {selectedSlots} from '../../../store/reducers/getSlots';
 import {navigate} from '../../../navigators';
 import {evaluateSlotTiming, formatLateDuration} from '../../../utils/geoHelper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
+import moment from 'moment';
 
 export const ScheduleSlots = ({route}: any) => {
   const currentDate = route?.params?.day || 'Selected Date';
@@ -26,6 +28,25 @@ export const ScheduleSlots = ({route}: any) => {
   const slots = data?.data || {};
   const toast = useToast();
   const dispatch = useAppDispatch();
+
+  // Date calculation: Today vs Past vs Future
+  const rawDateStr = data?.date || route?.params?.day;
+  const targetMoment = moment(
+    rawDateStr,
+    ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601],
+    true,
+  ).isValid()
+    ? moment(rawDateStr, ['YYYY-MM-DD', 'MMMM DD, YYYY', 'YYYY/MM/DD', moment.ISO_8601], true)
+    : moment(rawDateStr);
+
+  const todayMoment = moment().startOf('day');
+  const taskMoment = targetMoment.isValid() ? targetMoment.clone().startOf('day') : todayMoment;
+
+  const isToday = taskMoment.isSame(todayMoment, 'day');
+  const isPast = taskMoment.isBefore(todayMoment, 'day');
+  const isFuture = taskMoment.isAfter(todayMoment, 'day');
+  const formattedTaskDate = taskMoment.format('YYYY-MM-DD');
+  const todayDateStr = todayMoment.format('YYYY-MM-DD');
 
   useEffect(() => {
     if (status === 'failed' && error) {
@@ -49,6 +70,23 @@ export const ScheduleSlots = ({route}: any) => {
   };
 
   const handleScanAsset = (item: any) => {
+    if (!isToday) {
+      if (isPast) {
+        Alert.alert(
+          'Scanning Disabled (Past Date)',
+          `This cleaning task was scheduled for a past date (${taskMoment.format('DD MMMM YYYY')}).\n\nJanitors are only permitted to scan and execute tasks for Today (${todayMoment.format('DD MMMM YYYY')}).`,
+          [{text: 'Understood', style: 'default'}],
+        );
+      } else {
+        Alert.alert(
+          'Scanning Not Available (Upcoming Date)',
+          `This cleaning task is scheduled for an upcoming date (${taskMoment.format('DD MMMM YYYY')}).\n\nYou cannot scan upcoming tasks in advance. Please scan on the scheduled day.`,
+          [{text: 'Understood', style: 'default'}],
+        );
+      }
+      return;
+    }
+
     navigate('JanitorQRScanner', {
       assignment: item,
       expectedAssetCode: item.asset_ref_no,
@@ -57,7 +95,7 @@ export const ScheduleSlots = ({route}: any) => {
       checklistId: item.checklist_id,
       assignmentId: item.assignment_id,
       slotsDetail: item.slots_detail || item.slots_list,
-      selectedDate: data?.date || currentDate,
+      selectedDate: formattedTaskDate,
       settings: data?.settings,
     });
   };
@@ -78,12 +116,61 @@ export const ScheduleSlots = ({route}: any) => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Selected Date Header Banner */}
         <View style={styles.dateHeaderCard}>
-          <MaterialIcons name="event" size={24} color={colors.primary} />
+          <MaterialIcons
+            name={isToday ? 'event-available' : isPast ? 'history' : 'event'}
+            size={26}
+            color={isToday ? colors.primary : isPast ? '#DC2626' : '#2563EB'}
+          />
           <View style={styles.dateInfo}>
             <Text style={styles.dateSubTitle}>SCHEDULED SLOTS FOR</Text>
             <Text style={styles.dateTitleText}>{currentDate}</Text>
           </View>
+          <View
+            style={[
+              styles.dateStatusBadge,
+              isToday
+                ? styles.dateBadgeToday
+                : isPast
+                ? styles.dateBadgePast
+                : styles.dateBadgeFuture,
+            ]}>
+            <Text
+              style={[
+                styles.dateStatusBadgeText,
+                isToday
+                  ? styles.dateBadgeTextToday
+                  : isPast
+                  ? styles.dateBadgeTextPast
+                  : styles.dateBadgeTextFuture,
+              ]}>
+              {isToday ? 'TODAY' : isPast ? 'PAST' : 'UPCOMING'}
+            </Text>
+          </View>
         </View>
+
+        {/* Date Restriction Banner for Past / Upcoming Dates */}
+        {!isToday && (
+          <View
+            style={[
+              styles.dateNoticeBanner,
+              isPast ? styles.dateNoticePast : styles.dateNoticeFuture,
+            ]}>
+            <MaterialIcons
+              name={isPast ? 'lock-clock' : 'schedule'}
+              size={18}
+              color={isPast ? '#B91C1C' : '#1D4ED8'}
+            />
+            <Text
+              style={[
+                styles.dateNoticeText,
+                isPast ? styles.dateNoticeTextPast : styles.dateNoticeTextFuture,
+              ]}>
+              {isPast
+                ? `Past Schedule (${taskMoment.format('DD MMM')}) - Scanning & execution disabled. Janitors can only scan today's tasks.`
+                : `Upcoming Schedule (${taskMoment.format('DD MMM')}) - Scanning will unlock on the scheduled day.`}
+            </Text>
+          </View>
+        )}
 
         {isJanitor ? (
           /* Janitor Cleaning Work Orders List */
@@ -142,16 +229,22 @@ export const ScheduleSlots = ({route}: any) => {
                       </Text>
                     </View>
 
-                    {/* Interactive Asset Row (Tap opens QR Reader) */}
+                    {/* Interactive Asset Row (Tap opens QR Reader if today, or shows restriction notice) */}
                     <TouchableOpacity
-                      activeOpacity={0.75}
-                      style={styles.assetInteractiveCard}
+                      activeOpacity={isToday ? 0.75 : 0.85}
+                      style={[styles.assetInteractiveCard, !isToday && styles.assetCardDisabled]}
                       onPress={() => handleScanAsset(item)}>
-                      <View style={styles.assetIconBadge}>
-                        <MaterialIcons name="qr-code-scanner" size={20} color={colors.primary} />
+                      <View style={[styles.assetIconBadge, !isToday && styles.assetIconBadgeDisabled]}>
+                        <MaterialIcons
+                          name={isToday ? 'qr-code-scanner' : 'qr-code'}
+                          size={20}
+                          color={isToday ? colors.primary : '#94A3B8'}
+                        />
                       </View>
                       <View style={styles.assetInfoCol}>
-                        <Text style={styles.assetSubLabel}>ASSET CODE (TAP TO SCAN)</Text>
+                        <Text style={[styles.assetSubLabel, !isToday && {color: '#64748B'}]}>
+                          {isToday ? 'ASSET CODE (TAP TO SCAN)' : 'ASSET CODE (VIEW ONLY)'}
+                        </Text>
                         <Text style={styles.assetRefValue} numberOfLines={1}>
                           {item.asset_ref_no || 'Tap to Scan Asset'}
                         </Text>
@@ -161,7 +254,11 @@ export const ScheduleSlots = ({route}: any) => {
                           {item.zone_floor ? `Floor ${item.zone_floor}` : ''}
                         </Text>
                       </View>
-                      <MaterialIcons name="chevron-right" size={24} color={colors.primary} />
+                      <MaterialIcons
+                        name={isToday ? 'chevron-right' : 'lock-outline'}
+                        size={isToday ? 24 : 18}
+                        color={isToday ? colors.primary : '#94A3B8'}
+                      />
                     </TouchableOpacity>
 
                     {/* Assigned Slots / Shifts with Timing Check */}
@@ -250,11 +347,28 @@ export const ScheduleSlots = ({route}: any) => {
 
                     {/* Primary Scan & Start Cleaning CTA Button */}
                     <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.scanCtaButton}
+                      activeOpacity={isToday ? 0.85 : 0.75}
+                      style={[
+                        styles.scanCtaButton,
+                        !isToday && (isPast ? styles.scanCtaButtonPast : styles.scanCtaButtonFuture),
+                      ]}
                       onPress={() => handleScanAsset(item)}>
-                      <MaterialIcons name="qr-code-scanner" size={20} color={colors.white} />
-                      <Text style={styles.scanCtaButtonText}>SCAN ASSET QR TO START</Text>
+                      <MaterialIcons
+                        name={isToday ? 'qr-code-scanner' : isPast ? 'lock' : 'event'}
+                        size={20}
+                        color={isToday ? colors.white : isPast ? '#64748B' : '#1D4ED8'}
+                      />
+                      <Text
+                        style={[
+                          styles.scanCtaButtonText,
+                          !isToday && (isPast ? styles.scanCtaButtonTextPast : styles.scanCtaButtonTextFuture),
+                        ]}>
+                        {isToday
+                          ? 'SCAN ASSET QR TO START'
+                          : isPast
+                          ? 'SCAN DISABLED (PAST DATE)'
+                          : `SCAN ON ${taskMoment.format('DD MMM').toUpperCase()}`}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -368,6 +482,99 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     color: colors.header,
     marginTop: 2,
+  },
+  dateStatusBadge: {
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  dateBadgeToday: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  dateBadgePast: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  dateBadgeFuture: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  dateStatusBadgeText: {
+    fontSize: scaleFont(10.5),
+    fontFamily: FontFamily.bold,
+    letterSpacing: 0.5,
+  },
+  dateBadgeTextToday: {
+    color: '#059669',
+  },
+  dateBadgeTextPast: {
+    color: '#DC2626',
+  },
+  dateBadgeTextFuture: {
+    color: '#2563EB',
+  },
+  dateNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  dateNoticePast: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  dateNoticeFuture: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  dateNoticeText: {
+    fontSize: scaleFont(11.5),
+    fontFamily: FontFamily.medium,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  dateNoticeTextPast: {
+    color: '#991B1B',
+  },
+  dateNoticeTextFuture: {
+    color: '#1E40AF',
+  },
+  assetCardDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  assetIconBadgeDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  scanCtaButtonPast: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  scanCtaButtonFuture: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  scanCtaButtonTextPast: {
+    color: '#64748B',
+  },
+  scanCtaButtonTextFuture: {
+    color: '#1D4ED8',
   },
   slotsCard: {
     backgroundColor: colors.white,
