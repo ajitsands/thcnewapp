@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {navigate} from '../../../navigators';
 import {evaluateSlotTiming, formatLateDuration} from '../../../utils/geoHelper';
 import MaterialIcons from '@react-native-vector-icons/material-icons';
 import moment from 'moment';
+import AppAlertModal, {AppAlertProps} from '../../../core/components/AppAlertModal';
 
 export const ScheduleSlots = ({route}: any) => {
   const currentDate = route?.params?.day || 'Selected Date';
@@ -69,20 +70,34 @@ export const ScheduleSlots = ({route}: any) => {
     );
   };
 
+  const [customAlert, setCustomAlert] = useState<AppAlertProps | null>(null);
+
+  const showCustomAlert = (config: Omit<AppAlertProps, 'visible'>) => {
+    setCustomAlert({
+      ...config,
+      visible: true,
+      onClose: () => setCustomAlert(null),
+    });
+  };
+
   const handleScanAsset = (item: any) => {
     if (!isToday) {
       if (isPast) {
-        Alert.alert(
-          'Scanning Disabled (Past Date)',
-          `This cleaning task was scheduled for a past date (${taskMoment.format('DD MMMM YYYY')}).\n\nJanitors are only permitted to scan and execute tasks for Today (${todayMoment.format('DD MMMM YYYY')}).`,
-          [{text: 'Understood', style: 'default'}],
-        );
+        showCustomAlert({
+          type: 'danger',
+          title: 'Scanning Disabled',
+          badgeLabel: 'PAST TASK - LOCKED',
+          message: `This cleaning task was scheduled for a past date (${taskMoment.format('DD MMMM YYYY')}).\n\nJanitors are only permitted to scan and execute tasks for Today (${todayMoment.format('DD MMMM YYYY')}).`,
+          buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+        });
       } else {
-        Alert.alert(
-          'Scanning Not Available (Upcoming Date)',
-          `This cleaning task is scheduled for an upcoming date (${taskMoment.format('DD MMMM YYYY')}).\n\nYou cannot scan upcoming tasks in advance. Please scan on the scheduled day.`,
-          [{text: 'Understood', style: 'default'}],
-        );
+        showCustomAlert({
+          type: 'upcoming',
+          title: 'Scanning Not Available',
+          badgeLabel: 'UPCOMING TASK - NOT STARTED',
+          message: `This cleaning task is scheduled for an upcoming date (${taskMoment.format('DD MMMM YYYY')}).\n\nYou cannot scan upcoming tasks in advance. Please scan on the scheduled day.`,
+          buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+        });
       }
       return;
     }
@@ -311,18 +326,30 @@ export const ScheduleSlots = ({route}: any) => {
                                 slotStatusText = 'Completed (On Time)';
                               }
                             } else {
-                              if (timing.isLate) {
+                              if (timing.isExpired || timing.isLate) {
                                 pillStyle = styles.slotPillLate;
-                                iconName = 'alarm-on';
+                                iconName = 'lock-clock';
                                 iconColor = '#DC2626';
                                 textStyle = styles.slotPillTextLate;
-                                slotStatusText = `Pending (Late by ${formattedLateTime})`;
+                                slotStatusText = `Expired (Closed at ${timing.deadlineStr})`;
+                              } else if (timing.isUpcoming) {
+                                pillStyle = styles.slotPillPending;
+                                iconName = 'schedule';
+                                iconColor = '#2563EB';
+                                textStyle = styles.slotPillTextPending;
+                                slotStatusText = `Upcoming (Opens at ${timing.startTimeStr})`;
+                              } else if (timing.isGracePeriod) {
+                                pillStyle = styles.slotPillPartial;
+                                iconName = 'alarm';
+                                iconColor = '#D97706';
+                                textStyle = styles.slotPillTextPartial;
+                                slotStatusText = `Grace Period (Until ${timing.deadlineStr})`;
                               } else if (timing.isWithinWindow) {
                                 pillStyle = styles.slotPillDone;
                                 iconName = 'check-circle';
                                 iconColor = '#059669';
                                 textStyle = styles.slotPillTextDone;
-                                slotStatusText = 'Pending (On Time)';
+                                slotStatusText = 'Active (On Time)';
                               } else {
                                 pillStyle = styles.slotPillPending;
                                 iconName = 'schedule';
@@ -442,6 +469,15 @@ export const ScheduleSlots = ({route}: any) => {
           </View>
         )}
       </ScrollView>
+
+      {/* Modern Attractive App Alert Modal */}
+      {customAlert && (
+        <AppAlertModal
+          {...customAlert}
+          visible={!!customAlert}
+          onClose={() => setCustomAlert(null)}
+        />
+      )}
     </View>
   );
 };

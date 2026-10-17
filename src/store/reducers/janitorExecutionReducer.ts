@@ -217,6 +217,8 @@ export const submitChecklistExecution = createAsyncThunk(
       date?: string;
       status?: string;
       remarks?: string;
+      start_time?: string;
+      end_time?: string;
       scan_lat?: number | string;
       scan_lng?: number | string;
       asset_lat?: number | string;
@@ -254,6 +256,12 @@ export const submitChecklistExecution = createAsyncThunk(
       }
       if (params.remarks) {
         formData.append('remarks', params.remarks);
+      }
+      if (params.start_time) {
+        formData.append('start_time', params.start_time);
+      }
+      if (params.end_time) {
+        formData.append('end_time', params.end_time);
       }
       if (params.scan_lat !== undefined && params.scan_lat !== null) {
         formData.append('scan_lat', String(params.scan_lat));

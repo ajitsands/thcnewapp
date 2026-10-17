@@ -211,6 +211,12 @@ export interface SlotTimingStatus {
   statusLabel: string;
   badgeColor: string;
   isWithinWindow: boolean;
+  isUpcoming: boolean;
+  isExpired: boolean;
+  isGracePeriod: boolean;
+  startTimeStr: string;
+  endTimeStr: string;
+  deadlineStr: string;
 }
 
 /**
@@ -233,8 +239,8 @@ export const formatLateDuration = (totalMinutes: number): string => {
 };
 
 /**
- * Evaluates whether current completion is on time or late based on slot end_time and server lateThresholdMinutes.
- * Late duration is calculated from the scheduled end time once the threshold is exceeded.
+ * Evaluates whether current completion is on time, upcoming, in grace period, or late-expired based on slot start_time, end_time, and server lateThresholdMinutes.
+ * Submission is strictly allowed ONLY when current time is within [start_time, end_time + lateThresholdMinutes].
  */
 export const evaluateSlotTiming = (
   slot: SlotRuleInfo,
@@ -307,22 +313,16 @@ export const evaluateSlotTiming = (
       statusLabel: 'No Time Rule (On Time)',
       badgeColor: '#10B981',
       isWithinWindow: true,
+      isUpcoming: false,
+      isExpired: false,
+      isGracePeriod: false,
+      startTimeStr: startTimeStr || '',
+      endTimeStr: endTimeStr || '',
+      deadlineStr: endTimeStr || '',
     };
   }
 
   const now = moment();
-
-  // Parse slot times (supports "08:00", "08:00:00", "hh:mm A", "h:mm A", "h A", etc.)
-  const parsedEnd = moment(endTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'h:mm A', 'h A', 'H:m']);
-  if (!parsedEnd.isValid()) {
-    return {
-      isLate: false,
-      delayMinutes: 0,
-      statusLabel: 'On Time',
-      badgeColor: '#10B981',
-      isWithinWindow: true,
-    };
-  }
 
   // Determine the base day (respecting the selected slot date)
   let baseDate = now.clone();
@@ -340,14 +340,21 @@ export const evaluateSlotTiming = (
     }
   }
 
-  // If viewing a future date, slots cannot be late yet
-  if (baseDate.isAfter(now, 'day')) {
+  // Parse slot times (supports "08:00", "08:00:00", "hh:mm A", "h:mm A", "h A", etc.)
+  const parsedEnd = moment(endTimeStr, ['HH:mm', 'HH:mm:ss', 'hh:mm A', 'h:mm A', 'h A', 'H:m']);
+  if (!parsedEnd.isValid()) {
     return {
       isLate: false,
       delayMinutes: 0,
-      statusLabel: 'Upcoming Window',
-      badgeColor: '#3B82F6',
-      isWithinWindow: false,
+      statusLabel: 'On Time',
+      badgeColor: '#10B981',
+      isWithinWindow: true,
+      isUpcoming: false,
+      isExpired: false,
+      isGracePeriod: false,
+      startTimeStr: startTimeStr || '',
+      endTimeStr: endTimeStr || '',
+      deadlineStr: endTimeStr || '',
     };
   }
 
@@ -363,35 +370,47 @@ export const evaluateSlotTiming = (
   }
 
   const threshold = Math.max(0, Number(lateThresholdMinutes) || 0);
+  const deadlineMoment = endMoment.clone().add(threshold, 'minutes');
 
-  // Case 1: Current time is AFTER the slot's end time
-  if (now.isAfter(endMoment)) {
-    const diffMinutes = Math.max(1, now.diff(endMoment, 'minutes'));
+  const startFormatted = startMoment.format('HH:mm');
+  const endFormatted = endMoment.format('HH:mm');
+  const deadlineFormatted = deadlineMoment.format('HH:mm');
 
-    // If beyond the allowed threshold/grace period -> LATE!
-    // Delay is strictly calculated from the scheduled End time (diffMinutes)
-    if (diffMinutes > threshold) {
-      const formatted = formatLateDuration(diffMinutes);
-      return {
-        isLate: true,
-        delayMinutes: diffMinutes,
-        statusLabel: `Late by ${formatted}`,
-        badgeColor: '#EF4444',
-        isWithinWindow: false,
-      };
-    }
-
-    // Within the allowed threshold / grace period -> On Time
+  // Case A: Future date (Upcoming date)
+  if (baseDate.isAfter(now, 'day')) {
     return {
       isLate: false,
       delayMinutes: 0,
-      statusLabel: threshold > 0 ? `On Time (Within ${threshold}m Threshold)` : 'On Time',
-      badgeColor: '#10B981',
-      isWithinWindow: true,
+      statusLabel: 'Upcoming Date',
+      badgeColor: '#3B82F6',
+      isWithinWindow: false,
+      isUpcoming: true,
+      isExpired: false,
+      isGracePeriod: false,
+      startTimeStr: startFormatted,
+      endTimeStr: endFormatted,
+      deadlineStr: deadlineFormatted,
     };
   }
 
-  // Case 2: Current time is BEFORE the slot's start time -> Upcoming window
+  // Case B: Past date (Expired date)
+  if (baseDate.isBefore(now, 'day')) {
+    return {
+      isLate: true,
+      delayMinutes: 1440,
+      statusLabel: 'Past Date (Expired)',
+      badgeColor: '#EF4444',
+      isWithinWindow: false,
+      isUpcoming: false,
+      isExpired: true,
+      isGracePeriod: false,
+      startTimeStr: startFormatted,
+      endTimeStr: endFormatted,
+      deadlineStr: deadlineFormatted,
+    };
+  }
+
+  // Case C: Current time is BEFORE the slot's start time -> Upcoming window (Submission prevented)
   if (now.isBefore(startMoment)) {
     return {
       isLate: false,
@@ -399,15 +418,64 @@ export const evaluateSlotTiming = (
       statusLabel: 'Upcoming Window',
       badgeColor: '#3B82F6',
       isWithinWindow: false,
+      isUpcoming: true,
+      isExpired: false,
+      isGracePeriod: false,
+      startTimeStr: startFormatted,
+      endTimeStr: endFormatted,
+      deadlineStr: deadlineFormatted,
     };
   }
 
-  // Case 3: Current time is between start_time and end_time -> ACTIVE & ON TIME!
+  // Case D: Current time is AFTER deadlineMoment (end_time + late allowed by administrator) -> LATE EXPIRED (Submission prevented)
+  if (now.isAfter(deadlineMoment)) {
+    const diffMinutes = Math.max(1, now.diff(endMoment, 'minutes'));
+    const formatted = formatLateDuration(diffMinutes);
+    return {
+      isLate: true,
+      delayMinutes: diffMinutes,
+      statusLabel: `Late by ${formatted} (Expired)`,
+      badgeColor: '#EF4444',
+      isWithinWindow: false,
+      isUpcoming: false,
+      isExpired: true,
+      isGracePeriod: false,
+      startTimeStr: startFormatted,
+      endTimeStr: endFormatted,
+      deadlineStr: deadlineFormatted,
+    };
+  }
+
+  // Case E: Current time is between end_time and deadlineMoment (grace period allowed by administrator)
+  if (now.isAfter(endMoment)) {
+    const diffMinutes = Math.max(1, now.diff(endMoment, 'minutes'));
+    return {
+      isLate: false,
+      delayMinutes: diffMinutes,
+      statusLabel: threshold > 0 ? `Grace Period (Until ${deadlineFormatted})` : 'On Time',
+      badgeColor: '#F59E0B',
+      isWithinWindow: true,
+      isUpcoming: false,
+      isExpired: false,
+      isGracePeriod: true,
+      startTimeStr: startFormatted,
+      endTimeStr: endFormatted,
+      deadlineStr: deadlineFormatted,
+    };
+  }
+
+  // Case F: Current time is between start_time and end_time -> ACTIVE & ON TIME!
   return {
     isLate: false,
     delayMinutes: 0,
     statusLabel: 'On Time',
     badgeColor: '#10B981',
     isWithinWindow: true,
+    isUpcoming: false,
+    isExpired: false,
+    isGracePeriod: false,
+    startTimeStr: startFormatted,
+    endTimeStr: endFormatted,
+    deadlineStr: deadlineFormatted,
   };
 };

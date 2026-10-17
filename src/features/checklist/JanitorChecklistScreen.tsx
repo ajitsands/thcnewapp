@@ -37,6 +37,7 @@ import {useToast} from 'react-native-toast-notifications';
 import {launchCamera} from 'react-native-image-picker';
 import moment from 'moment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import AppAlertModal, {AppAlertProps} from '../../core/components/AppAlertModal';
 
 interface ChecklistItemState {
   item_id: string | number;
@@ -89,37 +90,67 @@ export const JanitorChecklistScreen = () => {
   const isFuture = taskDate > todayDate;
 
   // Parse Slots
-  let parsedSlots: any[] = [];
+  let rawParsedSlots: any[] = [];
   try {
     if (typeof slotsDetail === 'string') {
       if (slotsDetail.trim().startsWith('[')) {
-        parsedSlots = JSON.parse(slotsDetail);
+        rawParsedSlots = JSON.parse(slotsDetail);
       } else {
-        parsedSlots = slotsDetail
+        rawParsedSlots = slotsDetail
           .split(',')
           .map(s => s.trim())
           .filter(Boolean)
           .map(s => ({name: s, slot_name: s, slot_time: s, has_rule: 1}));
       }
     } else if (Array.isArray(slotsDetail)) {
-      parsedSlots = slotsDetail;
+      rawParsedSlots = slotsDetail;
     } else if (Array.isArray(assignment?.slots_list)) {
-      parsedSlots = assignment.slots_list;
+      rawParsedSlots = assignment.slots_list;
     } else if (typeof assignment?.slots === 'string') {
-      parsedSlots = assignment.slots
+      rawParsedSlots = assignment.slots
         .split(',')
         .map((s: string) => s.trim())
         .filter(Boolean)
         .map((s: string) => ({name: s, slot_name: s, slot_time: s, has_rule: 1}));
     }
   } catch (e) {
-    parsedSlots = [];
+    rawParsedSlots = [];
   }
-  if (!parsedSlots || parsedSlots.length === 0) {
-    parsedSlots = [
+  if (!rawParsedSlots || rawParsedSlots.length === 0) {
+    rawParsedSlots = [
       {name: 'Slot 1', slot_name: 'Slot 1', slot_time: 'Slot 1', start_time: '08:00', end_time: '12:00', has_rule: 1},
     ];
   }
+
+  // Assign standard windows to EVERY slot so all slots have explicit timing rules
+  const totalSlotsCount = rawParsedSlots.length;
+  const parsedSlots = rawParsedSlots.map((s: any, idx: number) => {
+    let sStart = s.start_time;
+    let sEnd = s.end_time;
+    if (!sStart || !sEnd || sEnd === '0' || sEnd === 'No Rule') {
+      if (totalSlotsCount === 1) {
+        sStart = '08:00';
+        sEnd = '18:00';
+      } else if (totalSlotsCount === 2) {
+        sStart = idx === 0 ? '08:00' : '14:00';
+        sEnd = idx === 0 ? '14:00' : '20:00';
+      } else if (totalSlotsCount === 3) {
+        sStart = idx === 0 ? '08:00' : idx === 1 ? '12:00' : '16:00';
+        sEnd = idx === 0 ? '12:00' : idx === 1 ? '16:00' : '20:00';
+      } else {
+        const startH = 8 + idx * 2;
+        const endH = startH + 2;
+        sStart = `${String(Math.min(22, startH)).padStart(2, '0')}:00`;
+        sEnd = `${String(Math.min(23, endH)).padStart(2, '0')}:00`;
+      }
+    }
+    return {
+      ...s,
+      start_time: sStart,
+      end_time: sEnd,
+      has_rule: 1,
+    };
+  });
 
   // Helper to extract a consistent slot key
   const getSlotKey = (s: any, idx: number) => {
@@ -134,39 +165,11 @@ export const JanitorChecklistScreen = () => {
 
   // Active Selected Slot
   const [selectedSlotIndex, setSelectedSlotIndex] = useState(0);
-  const rawActiveSlot: any = parsedSlots[selectedSlotIndex] || parsedSlots[0] || {
+  const activeSlot: any = parsedSlots[selectedSlotIndex] || parsedSlots[0] || {
     name: 'Slot 1',
     start_time: '08:00',
     end_time: '12:00',
     has_rule: 1,
-  };
-
-  // Standard slot timing fallback windows if not explicitly provided
-  const totalSlotsCount = parsedSlots.length || 1;
-  let defStart = '08:00';
-  let defEnd = '12:00';
-
-  if (totalSlotsCount === 1) {
-    defStart = '08:00';
-    defEnd = '18:00';
-  } else if (totalSlotsCount === 2) {
-    defStart = selectedSlotIndex === 0 ? '08:00' : '14:00';
-    defEnd = selectedSlotIndex === 0 ? '14:00' : '20:00';
-  } else if (totalSlotsCount === 3) {
-    defStart = selectedSlotIndex === 0 ? '08:00' : selectedSlotIndex === 1 ? '12:00' : '16:00';
-    defEnd = selectedSlotIndex === 0 ? '12:00' : selectedSlotIndex === 1 ? '16:00' : '20:00';
-  } else {
-    const startH = 8 + selectedSlotIndex * 2;
-    const endH = startH + 2;
-    defStart = `${String(Math.min(22, startH)).padStart(2, '0')}:00`;
-    defEnd = `${String(Math.min(23, endH)).padStart(2, '0')}:00`;
-  }
-
-  const activeSlot = {
-    ...rawActiveSlot,
-    start_time: rawActiveSlot.start_time && rawActiveSlot.start_time !== '0' ? rawActiveSlot.start_time : defStart,
-    end_time: rawActiveSlot.end_time && rawActiveSlot.end_time !== '0' ? rawActiveSlot.end_time : defEnd,
-    has_rule: rawActiveSlot.has_rule !== undefined ? rawActiveSlot.has_rule : 1,
   };
 
   const activeSlotKey = getSlotKey(activeSlot, selectedSlotIndex);
@@ -181,6 +184,15 @@ export const JanitorChecklistScreen = () => {
 
   const [generalRemarks, setGeneralRemarks] = useState('');
   const [uploadingItemId, setUploadingItemId] = useState<string | number | null>(null);
+  const [customAlert, setCustomAlert] = useState<AppAlertProps | null>(null);
+
+  const showCustomAlert = (config: Omit<AppAlertProps, 'visible'>) => {
+    setCustomAlert({
+      ...config,
+      visible: true,
+      onClose: () => setCustomAlert(null),
+    });
+  };
 
   const currentSlotItems = slotStates[activeSlotKey] || {};
   const activeSlotExecution = slotExecutions[activeSlotKey] || null;
@@ -395,7 +407,31 @@ export const JanitorChecklistScreen = () => {
       }
       navigation.goBack();
     } else if (submitError) {
-      toast.show(submitError, {type: 'danger'});
+      if (submitError.toUpperCase().includes('UPCOMING') || submitError.toUpperCase().includes('NOT STARTED')) {
+        showCustomAlert({
+          type: 'upcoming',
+          title: 'Upcoming Window - Submission Locked',
+          badgeLabel: 'WINDOW NOT STARTED',
+          message: submitError,
+          buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+        });
+      } else if (submitError.toUpperCase().includes('EXPIRED') || submitError.toUpperCase().includes('PASSED') || submitError.toUpperCase().includes('LATE')) {
+        showCustomAlert({
+          type: 'expired',
+          title: 'Slot Closed - Submission Locked',
+          badgeLabel: 'DEADLINE EXPIRED',
+          message: submitError,
+          buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+        });
+      } else {
+        showCustomAlert({
+          type: 'danger',
+          title: 'Submission Error',
+          badgeLabel: 'SERVER ERROR',
+          message: submitError,
+          buttons: [{text: 'CLOSE', style: 'default'}],
+        });
+      }
       dispatch(resetSubmitState());
     }
   }, [
@@ -418,6 +454,20 @@ export const JanitorChecklistScreen = () => {
     if (!isToday) {
       toast.show(
         `Checklist is view-only for ${isPast ? 'past' : 'upcoming'} dates. Submissions are only permitted for today's tasks.`,
+        {type: 'warning'},
+      );
+      return;
+    }
+    if (slotTiming.isUpcoming) {
+      toast.show(
+        `⏳ Upcoming Window: Opens at ${slotTiming.startTimeStr || activeSlot.start_time}. Items cannot be modified yet.`,
+        {type: 'warning'},
+      );
+      return;
+    }
+    if (slotTiming.isExpired) {
+      toast.show(
+        `⏰ Slot Expired: Closed at ${slotTiming.deadlineStr || activeSlot.end_time}. Items can no longer be modified.`,
         {type: 'warning'},
       );
       return;
@@ -452,6 +502,9 @@ export const JanitorChecklistScreen = () => {
   };
 
   const updateItemRemarks = (itemId: string, text: string) => {
+    if (!isToday || slotTiming.isUpcoming || slotTiming.isExpired) {
+      return;
+    }
     setSlotStates(prev => {
       const currentSlotMap = prev[activeSlotKey] || {};
       const existing = currentSlotMap[itemId] || {
@@ -481,6 +534,14 @@ export const JanitorChecklistScreen = () => {
   const handleTakePhoto = async (itemId: string) => {
     if (!isToday) {
       toast.show('Photo capture is disabled in view-only mode for past or upcoming dates.', {type: 'warning'});
+      return;
+    }
+    if (slotTiming.isUpcoming) {
+      toast.show(`⏳ Upcoming Window: Opens at ${slotTiming.startTimeStr || activeSlot.start_time}. Photo capture is locked.`, {type: 'warning'});
+      return;
+    }
+    if (slotTiming.isExpired) {
+      toast.show(`⏰ Slot Expired: Closed at ${slotTiming.deadlineStr || activeSlot.end_time}. Photo capture is locked.`, {type: 'warning'});
       return;
     }
     try {
@@ -543,13 +604,49 @@ export const JanitorChecklistScreen = () => {
 
   const handleSubmit = () => {
     if (!isToday) {
-      Alert.alert(
-        'Submission Disabled',
-        `This task was scheduled for ${taskDate}.\n\nJanitors are only permitted to execute and submit checklists for today's current date (${todayDate}).`,
-        [{text: 'Understood', style: 'default'}],
-      );
+      showCustomAlert({
+        type: 'danger',
+        title: 'Submission Disabled',
+        badgeLabel: isPast ? 'PAST DATE' : 'UPCOMING DATE',
+        message: `This task was scheduled for ${taskDate}.\n\nJanitors are only permitted to execute and submit checklists for today's current date (${todayDate}).`,
+        buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+      });
       return;
     }
+
+    if (slotTiming.isUpcoming) {
+      showCustomAlert({
+        type: 'upcoming',
+        title: 'Upcoming Window - Locked',
+        badgeLabel: `OPENS AT ${slotTiming.startTimeStr || activeSlot.start_time}`,
+        message: `This slot (${activeSlotKey}) is scheduled for ${slotTiming.startTimeStr || activeSlot.start_time} - ${slotTiming.endTimeStr || activeSlot.end_time}.\n\nJanitors cannot submit checklists for upcoming time slots before the scheduled start time (${slotTiming.startTimeStr || activeSlot.start_time}).\n\nPlease wait until the window opens to submit.`,
+        buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+      });
+      return;
+    }
+
+    if (slotTiming.isExpired) {
+      showCustomAlert({
+        type: 'expired',
+        title: 'Submission Closed',
+        badgeLabel: 'DEADLINE EXPIRED',
+        message: `This slot (${activeSlotKey}) was scheduled for ${slotTiming.startTimeStr || activeSlot.start_time} - ${slotTiming.endTimeStr || activeSlot.end_time}.\n\nWith the administrator's ${lateThresholdMinutes} minute grace allowance, the deadline was ${slotTiming.deadlineStr || activeSlot.end_time}.\n\nThis deadline has passed. Late submissions beyond the allowed threshold are strictly prevented.`,
+        buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+      });
+      return;
+    }
+
+    if (!slotTiming.isWithinWindow) {
+      showCustomAlert({
+        type: 'warning',
+        title: 'Submission Not Permitted',
+        badgeLabel: 'OUTSIDE WINDOW',
+        message: `This slot cannot be submitted at this time (${slotTiming.statusLabel}). Submissions are only permitted during the active scheduled window.`,
+        buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+      });
+      return;
+    }
+
     const currentSlotMap = slotStates[activeSlotKey] || {};
     const categoriesList = checklistData?.data || [];
     const pointsMap: Record<string, any> = {};
@@ -582,7 +679,12 @@ export const JanitorChecklistScreen = () => {
     const points = Object.values(pointsMap);
 
     if (points.length === 0) {
-      Alert.alert('Notice', 'No checklist items found to submit.');
+      showCustomAlert({
+        type: 'warning',
+        title: 'No Checklist Items',
+        message: 'No checklist items found to submit for this assignment.',
+        buttons: [{text: 'UNDERSTOOD', style: 'default'}],
+      });
       return;
     }
 
@@ -592,30 +694,39 @@ export const JanitorChecklistScreen = () => {
     const baseStatus = isCompletedAll ? 'Completed' : 'Partially Completed';
 
     // Timing evaluation & late calculation
-    const isLate = slotTiming.isLate;
+    const isLate = slotTiming.isLate || slotTiming.isGracePeriod;
     const delayMinutes = slotTiming.delayMinutes;
 
     let executionStatus = baseStatus;
     let finalRemarks = generalRemarks;
 
-    if (isLate) {
+    if (isLate && delayMinutes > 0) {
       const lateDurationFormatted = formatLateDuration(delayMinutes);
       executionStatus = `${baseStatus} (Late by ${lateDurationFormatted})`;
       const lateNote = `[LATE EXECUTION: Completed ${lateDurationFormatted} after scheduled end time (${activeSlot.end_time}, threshold: ${lateThresholdMinutes}m)]`;
       finalRemarks = generalRemarks ? `${lateNote} ${generalRemarks}` : lateNote;
     }
 
-    Alert.alert(
-      isSlotExecuted ? 'Update Slot Execution' : 'Confirm Submission',
-      isCompletedAll
-        ? `All ${totalPointsInSlot} checklist tasks are marked as Done.\n\nThis slot (${activeSlotKey}) will be logged as COMPLETED.${isLate ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`
-        : `⚠️ NOTICE: ${issuesCountInSlot} of ${totalPointsInSlot} tasks are marked as Issue / Not Done.\n\nThis slot (${activeSlotKey}) will be logged as PARTIALLY COMPLETED.${isLate ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`,
-      [
-        {text: 'Cancel', style: 'cancel'},
+    showCustomAlert({
+      type: isCompletedAll ? 'confirm' : 'warning',
+      title: isSlotExecuted ? 'Update Slot Execution' : 'Confirm Submission',
+      badgeLabel: isCompletedAll
+        ? 'ALL ITEMS DONE ✓'
+        : `${issuesCountInSlot} ISSUE${issuesCountInSlot > 1 ? 'S' : ''} FLAGGED ⚠️`,
+      message: isCompletedAll
+        ? `All ${totalPointsInSlot} checklist tasks are marked as Done.\n\nThis slot (${activeSlotKey}) will be logged as COMPLETED.${isLate && delayMinutes > 0 ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`
+        : `⚠️ NOTICE: ${issuesCountInSlot} of ${totalPointsInSlot} tasks are marked as Issue / Not Done.\n\nThis slot (${activeSlotKey}) will be logged as PARTIALLY COMPLETED.${isLate && delayMinutes > 0 ? `\n\n(Late by ${formatLateDuration(delayMinutes)})` : ''}\n\nProceed with submission?`,
+      buttons: [
         {
-          text: 'Submit Now',
+          text: 'CANCEL',
+          style: 'cancel',
+          onPress: () => setCustomAlert(null),
+        },
+        {
+          text: 'SUBMIT NOW',
           style: 'default',
           onPress: async () => {
+            setCustomAlert(null);
             // Persist points locally immediately
             persistSlotPointsLocally(activeSlotKey, currentSlotMap);
             setSlotExecutions(prev => ({
@@ -662,6 +773,8 @@ export const JanitorChecklistScreen = () => {
                 date: selectedDate || moment().format('YYYY-MM-DD'),
                 status: executionStatus,
                 remarks: finalRemarks,
+                start_time: slotTiming.startTimeStr || activeSlot.start_time,
+                end_time: slotTiming.endTimeStr || activeSlot.end_time,
                 points,
                 scan_lat: submitScanLat,
                 scan_lng: submitScanLng,
@@ -673,7 +786,7 @@ export const JanitorChecklistScreen = () => {
           },
         },
       ],
-    );
+    });
   };
 
   const categories = checklistData?.data || [];
@@ -756,7 +869,7 @@ export const JanitorChecklistScreen = () => {
                       : isExecutionPartial
                       ? '#D97706'
                       : '#059669'
-                    : slotTiming.isLate
+                    : slotTiming.isExpired
                     ? '#DC2626'
                     : slotTiming.badgeColor,
                 },
@@ -769,6 +882,12 @@ export const JanitorChecklistScreen = () => {
                       : isExecutionPartial
                       ? 'warning'
                       : 'check-circle'
+                    : slotTiming.isUpcoming
+                    ? 'schedule'
+                    : slotTiming.isExpired
+                    ? 'lock-clock'
+                    : slotTiming.isGracePeriod
+                    ? 'alarm'
                     : slotTiming.isLate
                     ? 'alarm'
                     : 'check-circle'
@@ -802,7 +921,7 @@ export const JanitorChecklistScreen = () => {
                 const isExec = s.is_completed === 'Yes' || Boolean(exec?.execution_id) || (exec?.status && exec.status !== 'Pending');
                 const st = exec?.status || s.execution_status || '';
                 const isPartial = st.toLowerCase().includes('partial');
-                const isLateSlot = st.toLowerCase().includes('late') || (isExec && pillTiming.isLate) || (!isExec && pillTiming.isLate);
+                const isLateSlot = st.toLowerCase().includes('late') || (isExec && pillTiming.isLate);
                 const timeRule = s.start_time && s.end_time && s.end_time !== '0'
                   ? `${s.start_time} - ${s.end_time}`
                   : 'Flexible';
@@ -818,8 +937,14 @@ export const JanitorChecklistScreen = () => {
                   } else {
                     statusBadgeText = 'Done ✓';
                   }
-                } else if (pillTiming.isLate) {
-                  statusBadgeText = `Late ⏰ (${formatLateDuration(pillTiming.delayMinutes)})`;
+                } else if (pillTiming.isUpcoming) {
+                  statusBadgeText = `${timeRule} (Opens ${pillTiming.startTimeStr})`;
+                } else if (pillTiming.isExpired) {
+                  statusBadgeText = `${timeRule} (Closed ⏰)`;
+                } else if (pillTiming.isGracePeriod) {
+                  statusBadgeText = `${timeRule} (Grace ⚠️)`;
+                } else {
+                  statusBadgeText = `${timeRule} (Open ✓)`;
                 }
 
                 return (
@@ -831,7 +956,8 @@ export const JanitorChecklistScreen = () => {
                       isSelected && styles.slotPillActive,
                       isExec && !isPartial && !isSelected && (isLateSlot ? styles.slotPillLateBorder : styles.slotPillDoneBorder),
                       isExec && isPartial && !isSelected && styles.slotPillPartialBorder,
-                      !isExec && isLateSlot && !isSelected && styles.slotPillLateBorder,
+                      !isExec && pillTiming.isExpired && !isSelected && styles.slotPillLateBorder,
+                      !isExec && pillTiming.isGracePeriod && !isSelected && styles.slotPillPartialBorder,
                     ]}
                     onPress={() => setSelectedSlotIndex(idx)}>
                     <View style={styles.slotPillTopRow}>
@@ -846,8 +972,16 @@ export const JanitorChecklistScreen = () => {
                         <View style={isLateSlot ? styles.pillLateBadge : styles.pillPartialBadge}>
                           <MaterialIcons name={isLateSlot ? 'alarm' : 'warning'} size={11} color={colors.white} />
                         </View>
-                      ) : isLateSlot ? (
+                      ) : pillTiming.isExpired ? (
                         <View style={styles.pillLateBadge}>
+                          <MaterialIcons name="lock-clock" size={11} color={colors.white} />
+                        </View>
+                      ) : pillTiming.isUpcoming ? (
+                        <View style={styles.pillUpcomingBadge}>
+                          <MaterialIcons name="schedule" size={11} color={colors.white} />
+                        </View>
+                      ) : pillTiming.isGracePeriod ? (
+                        <View style={styles.pillGraceBadge}>
                           <MaterialIcons name="alarm" size={11} color={colors.white} />
                         </View>
                       ) : null}
@@ -861,15 +995,30 @@ export const JanitorChecklistScreen = () => {
             </ScrollView>
           )}
 
-          {/* Time Warning if Late */}
-          {slotTiming.isLate && !isSlotExecuted && (
-            <View style={styles.lateWarningBox}>
-              <MaterialIcons name="warning" size={18} color="#DC2626" />
-              <Text style={styles.lateWarningText}>
-                Scheduled window ended at {activeSlot.end_time}. This job will be logged as{' '}
-                <Text style={{fontFamily: FontFamily.bold}}>
-                  Late by {formatLateDuration(slotTiming.delayMinutes)}
-                </Text>.
+          {/* Time Warning, Upcoming or Expired Status Banner */}
+          {!isSlotExecuted && slotTiming.isUpcoming && (
+            <View style={styles.upcomingWarningBox}>
+              <MaterialIcons name="schedule" size={18} color="#1D4ED8" />
+              <Text style={styles.upcomingWarningText}>
+                ⏳ <Text style={{fontFamily: FontFamily.bold}}>Upcoming Window ({slotTiming.startTimeStr} - {slotTiming.endTimeStr}):</Text> This slot has not started yet. Checklist submission is locked until {slotTiming.startTimeStr}.
+              </Text>
+            </View>
+          )}
+
+          {!isSlotExecuted && slotTiming.isExpired && (
+            <View style={styles.expiredWarningBox}>
+              <MaterialIcons name="lock-clock" size={18} color="#B91C1C" />
+              <Text style={styles.expiredWarningText}>
+                ⏰ <Text style={{fontFamily: FontFamily.bold}}>Submission Closed (Window Expired):</Text> Scheduled end was {slotTiming.endTimeStr} (+{lateThresholdMinutes}m allowed late). The deadline was {slotTiming.deadlineStr}. Submissions are strictly prohibited.
+              </Text>
+            </View>
+          )}
+
+          {!isSlotExecuted && slotTiming.isGracePeriod && (
+            <View style={styles.graceWarningBox}>
+              <MaterialIcons name="alarm" size={18} color="#B45309" />
+              <Text style={styles.graceWarningText}>
+                ⚠️ <Text style={{fontFamily: FontFamily.bold}}>Late Grace Period Active:</Text> Scheduled end was {slotTiming.endTimeStr}. You may submit until {slotTiming.deadlineStr} ({lateThresholdMinutes}m administrator allowance).
               </Text>
             </View>
           )}
@@ -1101,12 +1250,40 @@ export const JanitorChecklistScreen = () => {
         </View>
 
         {/* Submit Execution Button */}
-        {isToday ? (
+        {!isToday ? (
+          <View style={[styles.submitButton, styles.submitButtonViewOnly]}>
+            <MaterialIcons name="lock" size={20} color={colors.white} />
+            <Text style={styles.submitButtonText}>
+              SUBMISSION DISABLED ({isPast ? 'PAST DATE' : 'UPCOMING DATE'})
+            </Text>
+          </View>
+        ) : slotTiming.isUpcoming ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.submitButton, styles.submitButtonUpcoming]}
+            onPress={handleSubmit}>
+            <MaterialIcons name="lock" size={20} color={colors.white} />
+            <Text style={styles.submitButtonText}>
+              SUBMISSION LOCKED (OPENS AT {slotTiming.startTimeStr || activeSlot.start_time})
+            </Text>
+          </TouchableOpacity>
+        ) : slotTiming.isExpired ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.submitButton, styles.submitButtonExpired]}
+            onPress={handleSubmit}>
+            <MaterialIcons name="lock" size={20} color={colors.white} />
+            <Text style={styles.submitButtonText}>
+              SUBMISSION CLOSED (EXPIRED AT {slotTiming.deadlineStr || activeSlot.end_time})
+            </Text>
+          </TouchableOpacity>
+        ) : (
           <TouchableOpacity
             activeOpacity={0.85}
             style={[
               styles.submitButton,
               !isActiveSlotAllDone && styles.submitButtonPartial,
+              slotTiming.isGracePeriod && styles.submitButtonGrace,
               submitLoading && styles.submitButtonDisabled,
             ]}
             onPress={handleSubmit}
@@ -1118,20 +1295,26 @@ export const JanitorChecklistScreen = () => {
                 <MaterialIcons name={isSlotExecuted ? 'edit' : 'send'} size={20} color={colors.white} />
                 <Text style={styles.submitButtonText}>
                   {isSlotExecuted ? 'UPDATE CHECKLIST' : 'SUBMIT CHECKLIST'}{' '}
-                  ({isActiveSlotAllDone ? 'COMPLETED' : 'PARTIALLY COMPLETED'}{slotTiming.isLate ? ' - LATE' : ''})
+                  ({isActiveSlotAllDone ? 'COMPLETED' : 'PARTIALLY COMPLETED'}{slotTiming.isGracePeriod ? ' - GRACE' : ''})
                 </Text>
               </>
             )}
           </TouchableOpacity>
-        ) : (
-          <View style={[styles.submitButton, styles.submitButtonViewOnly]}>
-            <MaterialIcons name="lock" size={20} color={colors.white} />
-            <Text style={styles.submitButtonText}>
-              SUBMISSION DISABLED ({isPast ? 'PAST DATE' : 'UPCOMING DATE'})
-            </Text>
-          </View>
         )}
       </ScrollView>
+
+      {customAlert && (
+        <AppAlertModal
+          visible={customAlert.visible}
+          type={customAlert.type}
+          title={customAlert.title}
+          message={customAlert.message}
+          badgeLabel={customAlert.badgeLabel}
+          iconName={customAlert.iconName}
+          buttons={customAlert.buttons}
+          onClose={() => setCustomAlert(null)}
+        />
+      )}
     </View>
   );
 };
@@ -1283,9 +1466,27 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     marginLeft: 6,
   },
+  pillUpcomingBadge: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  pillGraceBadge: {
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
   slotPillLateBorder: {
     borderColor: '#EF4444',
     backgroundColor: '#FEF2F2',
+  },
+  slotPillPartialBorder: {
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
   },
   slotBannerBox: {
     flexDirection: 'row',
@@ -1593,6 +1794,77 @@ const styles = StyleSheet.create({
     backgroundColor: '#94A3B8',
     shadowOpacity: 0,
     elevation: 0,
+  },
+  submitButtonUpcoming: {
+    backgroundColor: '#3B82F6',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitButtonExpired: {
+    backgroundColor: '#DC2626',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitButtonGrace: {
+    backgroundColor: '#D97706',
+    shadowColor: '#D97706',
+  },
+  upcomingWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+  upcomingWarningText: {
+    color: '#1E40AF',
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  expiredWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+  expiredWarningText: {
+    color: '#991B1B',
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  graceWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+  graceWarningText: {
+    color: '#B45309',
+    fontSize: scaleFont(11),
+    fontFamily: FontFamily.regular,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
 });
 
